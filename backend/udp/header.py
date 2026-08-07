@@ -4,27 +4,6 @@ import struct
 # udp telemetry details: https://forums.ea.com/discussions/f1-25-general-discussion-en/discussion-f1%C2%AE-25-udp-specification/12187351
 """
 // Different packet types
-enum PacketId
-{
-    ePacketIdMotion                 = 0,    // Contains all motion data for player’s car – only sent while player is in control
-    ePacketIdSession                = 1,    // Data about the session – track, time left
-    ePacketIdLapData                = 2,    // Data about all the lap times of cars in the session
-    ePacketIdEvent                  = 3,    // Various notable events that happen during a session
-    ePacketIdParticipants           = 4,    // List of participants in the session, mostly relevant for multiplayer
-    ePacketIdCarSetups              = 5,    // Packet detailing car setups for cars in the race
-    ePacketIdCarTelemetry           = 6,    // Telemetry data for all cars
-    ePacketIdCarStatus              = 7,    // Status data for all cars
-    ePacketIdFinalClassification    = 8,    // Final classification confirmation at the end of a race
-    ePacketIdLobbyInfo              = 9,    // Information about players in a multiplayer lobby
-    ePacketIdCarDamage              = 10,   // Damage status for all cars
-    ePacketIdSessionHistory         = 11,   // Lap and tyre data for session
-    ePacketIdTyreSets               = 12,   // Extended tyre set data
-    ePacketIdMotionEx               = 13,   // Extended motion data for player car
-    ePacketIdTimeTrial              = 14,   // Time Trial specific data
-    ePacketIdLapPositions           = 15,   // Lap positions on each lap so a chart can be constructed
-    ePacketIdMax
-};
-
 struct PacketHeader
 {
     uint16      m_packetFormat;             // 2025
@@ -42,10 +21,10 @@ struct PacketHeader
 };
 """
 
-HEADER_SIZE = 29
 # little endian encoding of above packet header types
 # define this here instead of in unpack as we will likely be unpacking many times per second
 HEADER_STRUCT = struct.Struct("<HBBBBBQfIIBB")
+HEADER_SIZE = HEADER_STRUCT.size
 
 # frozen dataclass as we do not want to change a packet header once we receive it
 @dataclass(frozen = True)
