@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import struct
 
 from udp.header import HEADER_SIZE, PacketHeader
+from udp.constants import NUM_CARS
 
 """
 //-----------------------------------------------------------------------------
@@ -48,7 +49,6 @@ struct PacketParticipantsData
 };
 """
 
-NUM_CARS = 22
 PARTICIPANT_NAME_LENGTH = 32
 
 PARTICIPANT_STRUCT = struct.Struct(

@@ -1,27 +1,11 @@
 import struct
 
-from udp.motion import CAR_MOTION_SIZE, MOTION_PACKET_SIZE, NUM_CARS, MotionPacket
+from udp.motion import CAR_MOTION_SIZE, MOTION_PACKET_SIZE, MotionPacket
+from tests.helpers import make_header
+from udp.packet_id import PacketId
+from udp.constants import NUM_CARS
 
-HEADER_FORMAT = "<HBBBBBQfIIBB"
 CAR_FORMAT = "<ffffffhhhhhhffffff"
-
-def make_header(packet_id: int) -> bytes:
-    # see test header for field description
-    return struct.pack(
-        HEADER_FORMAT,
-        2025,
-        25,
-        1,
-        0,
-        1,
-        packet_id,
-        123456789,
-        42.5,
-        100,
-        100,
-        0,
-        255,
-    )
 
 
 def make_car_motion(index: int) -> bytes:
@@ -61,12 +45,14 @@ def test_motion_packet_size():
 
 
 def test_motion_packet_all_cars():
-    data = make_header(0)
+    data = make_header(PacketId.MOTION)
 
     for i in range(NUM_CARS):
         data += make_car_motion(i)
 
     packet = MotionPacket.from_bytes(data)
+
+    assert packet.header.packet_id == PacketId.MOTION
 
     # assert a snippet of cars
 

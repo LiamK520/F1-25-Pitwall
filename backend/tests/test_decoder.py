@@ -2,33 +2,13 @@ import struct
 
 import pytest
 
-from udp.decoder import PacketId, decode_packet
-from udp.motion import MotionPacket, NUM_CARS
+from tests.helpers import make_header
+from udp.constants import NUM_CARS
+from udp.decoder import decode_packet
+from udp.motion import MotionPacket
+from udp.packet_id import PacketId
 
-
-HEADER_FORMAT = "<HBBBBBQfIIBB"
 CAR_MOTION_FORMAT = "<ffffffhhhhhhffffff"
-
-# TODO: rewriting these a lot now. Maybe centralise the creation functions?
-
-
-def make_header(packet_id: int) -> bytes:
-    return struct.pack(
-        HEADER_FORMAT,
-        2025,
-        25,
-        1,
-        0,
-        1,
-        packet_id,
-        123456789,
-        42.5,
-        100,
-        100,
-        0,
-        255,
-    )
-
 
 def make_car_motion() -> bytes:
     return struct.pack(

@@ -2,30 +2,13 @@ import struct
 
 import pytest
 
-from udp.participants import NUM_CARS, PARTICIPANT_SIZE, PARTICIPANTS_PACKET_SIZE, ParticipantData, ParticipantsPacket
+from udp.participants import PARTICIPANT_SIZE, PARTICIPANTS_PACKET_SIZE, ParticipantData, ParticipantsPacket
+from tests.helpers import make_header
+from udp.packet_id import PacketId
+from udp.constants import NUM_CARS
 
 
-HEADER_FORMAT = "<HBBBBBQfIIBB"
 PARTICIPANT_FORMAT = "<BBBBBBB32sBBHBB12B"
-
-
-def make_header(packet_id: int) -> bytes:
-    return struct.pack(
-        HEADER_FORMAT,
-        2025,       # packet_format
-        25,         # game_year
-        1,          # game_major_version
-        0,          # game_minor_version
-        1,          # packet_version
-        packet_id,
-        123456789,  # session_uid
-        42.5,       # session_time
-        100,        # frame_identifier
-        100,        # overall_frame_identifier
-        0,          # player_car_index
-        255,        # secondary_player_car_index
-    )
-
 
 def make_participant(
     name: str = "Max Verstappen",
@@ -64,7 +47,7 @@ def make_participant(
 
 
 def make_participants_packet(num_active_cars: int = 20) -> bytes:
-    data = make_header(packet_id=4)
+    data = make_header(PacketId.PARTICIPANTS)
 
     data += struct.pack("<B", num_active_cars)
 
@@ -116,7 +99,7 @@ def test_participants_packet_reads_all_cars():
 
     packet = ParticipantsPacket.from_bytes(data)
 
-    assert packet.header.packet_id == 4
+    assert packet.header.packet_id == PacketId.PARTICIPANTS
     assert packet.num_active_cars == 20
 
     assert len(packet.participants) == 22

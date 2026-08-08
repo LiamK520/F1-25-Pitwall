@@ -1,8 +1,9 @@
-from enum import IntEnum
-
 from udp.header import PacketHeader
 from udp.motion import MotionPacket
 from udp.participants import ParticipantsPacket
+from udp.lap_data import LapDataPacket
+
+from udp.packet_id import PacketId
 
 """
 enum PacketId
@@ -27,23 +28,7 @@ enum PacketId
 };
 """
 
-class PacketId(IntEnum):
-    MOTION = 0
-    SESSION = 1
-    LAP_DATA = 2
-    EVENT = 3
-    PARTICIPANTS = 4
-    CAR_SETUPS = 5
-    CAR_TELEMETRY = 6
-    CAR_STATUS = 7
-    FINAL_CLASSIFICATION = 8
-    LOBBY_INFO = 9
-    CAR_DAMAGE = 10
-    SESSION_HISTORY = 11
-    TYRE_SETS = 12
-    MOTION_EX = 13
-    TIME_TRIAL = 14
-    LAP_POSITIONS = 15
+
 
 def decode_packet(data: bytes):
     header = PacketHeader.from_bytes(data)
@@ -55,6 +40,9 @@ def decode_packet(data: bytes):
 
     if packet_id == PacketId.MOTION:
         return MotionPacket.from_bytes(data)
+
+    if packet_id == PacketId.LAP_DATA:
+        return LapDataPacket.from_bytes(data)
 
     if packet_id == PacketId.PARTICIPANTS:
         return ParticipantsPacket.from_bytes(data)

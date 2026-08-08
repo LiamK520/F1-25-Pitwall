@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import struct
 
 from udp.header import HEADER_SIZE, PacketHeader
+from udp.constants import NUM_CARS
 
 """
 static const uint32     cs_maxNumCarsInUDPData = 22;
@@ -43,8 +44,6 @@ struct PacketMotionData
     CarMotionData   m_carMotionData[cs_maxNumCarsInUDPData];  // Data for all cars on track
 };
 """
-
-NUM_CARS = 22
 
 CAR_MOTION_STRUCT = struct.Struct(
     "<"
