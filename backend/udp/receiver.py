@@ -4,7 +4,11 @@ from udp.participants import ParticipantsPacket
 from udp.decoder import decode_packet
 from udp.motion import MotionPacket
 from udp.lap_data import LapDataPacket
+from udp.car_telemetry import CarTelemetryPacket
+from udp.car_status import CarStatusPacket
 from udp.recorder import PacketRecorder
+
+import argparse
 
 # maybe change to loopback later
 UDP_IP = "0.0.0.0"
@@ -14,20 +18,27 @@ BUFFER_SIZE = 4096
 # 0.5s will never cause issue in data flow as we receive packets at 20-60Hz
 SOCKET_TIMEOUT = 0.5
 
+def parse_args():
+    parser = argparse.ArgumentParser()
 
-def run_receiver():
+    parser.add_argument("--record", action="store_true", help="record incoming packets to file")
+
+    return parser.parse_args()
+
+
+def run_receiver(record=False):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     sock.bind((UDP_IP, UDP_PORT))
     sock.settimeout(SOCKET_TIMEOUT)
 
     recorder = PacketRecorder("recordings/test.bin")
-    #recorder.open()
+    if record:
+        recorder.open()
 
     print(f"Listening for F1 25 UDP data on port {UDP_PORT}")
 
     try:
-
         while True:
             try:
                 data, address = sock.recvfrom(BUFFER_SIZE)
@@ -35,7 +46,8 @@ def run_receiver():
                 continue
 
             try:
-                recorder.record_packet(data)
+                if record:
+                    recorder.record_packet(data)
                 packet = decode_packet(data)
 
                 if isinstance(packet, MotionPacket):
@@ -75,6 +87,34 @@ def run_receiver():
                             f"number={participant.race_number})"
                         )
 
+                if isinstance(packet, CarTelemetryPacket):
+                    player_index = packet.header.player_car_index
+                    # using car - 1 as my recording used keyboard so not very interesting telemetry...
+                    # car in recording is 19, be wary of error if rerunning and car index may be 0...
+                    telem = packet.cars[player_index - 1]
+
+                    print(
+                        f"Car {player_index - 1}: "
+                        f"{telem.speed} km/h | "
+                        f"Throttle {telem.throttle:.2f} | "
+                        f"Brake {telem.brake:.2f} | "
+                        f"Gear {telem.gear} | "
+                        f"RPM {telem.engine_rpm}"
+                    )
+
+                if isinstance(packet, CarStatusPacket):
+                    player_index = packet.header.player_car_index
+                    status = packet.cars[player_index]
+
+                    print(
+                        f"Car {player_index}: "
+                        f"Fuel {status.fuel_in_tank:.1f}kg | "
+                        f"Fuel laps {status.fuel_remaining_laps:.1f} | "
+                        f"Tyre age {status.tyres_age_laps} | "
+                        f"ERS {status.ers_store_energy / 1_000_000:.2f}MJ | "
+                        f"DRS allowed {status.drs_allowed}"
+                    )
+
             except NotImplementedError:
                 # Don't do anything for noww
                 pass
@@ -87,7 +127,9 @@ def run_receiver():
         recorder.close()
 
 if __name__ == "__main__":
+    args = parse_args()
+
     try:
-        run_receiver()
+        run_receiver(record=args.record)
     except KeyboardInterrupt:
         print("\nStopping UDP receiver")

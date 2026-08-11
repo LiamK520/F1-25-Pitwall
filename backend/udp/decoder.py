@@ -2,6 +2,8 @@ from udp.header import PacketHeader
 from udp.motion import MotionPacket
 from udp.participants import ParticipantsPacket
 from udp.lap_data import LapDataPacket
+from udp.car_telemetry import CarTelemetryPacket
+from udp.car_status import CarStatusPacket
 
 from udp.packet_id import PacketId
 
@@ -46,6 +48,12 @@ def decode_packet(data: bytes):
 
     if packet_id == PacketId.PARTICIPANTS:
         return ParticipantsPacket.from_bytes(data)
+
+    if packet_id == PacketId.CAR_TELEMETRY:
+        return CarTelemetryPacket.from_bytes(data)
+
+    if packet_id == PacketId.CAR_STATUS:
+        return CarStatusPacket.from_bytes(data)
 
     raise NotImplementedError(
         f"Packet type {packet_id.name} is not implemented yet"
