@@ -11,6 +11,26 @@ from udp.session import SessionPacket
 
 from udp.recorder import PacketRecorder
 
+#maybe consider import * as long
+from udp.event import (
+    EventPacket,
+    FastestLapEvent,
+    RetirementEvent,
+    DRSDisabledEvent,
+    TeamMateInPitsEvent,
+    RaceWinnerEvent,
+    PenaltyEvent,
+    SpeedTrapEvent,
+    StartLightsEvent,
+    DriveThroughServedEvent,
+    StopGoServedEvent,
+    FlashbackEvent,
+    ButtonsEvent,
+    OvertakeEvent,
+    SafetyCarEvent,
+    CollisionEvent,
+)
+
 import argparse
 
 # maybe change to loopback later
@@ -141,6 +161,117 @@ def run_receiver(record=False):
                         f"Floor {damage.floor_damage}% | "
                         f"Engine {damage.engine_damage}%"
                     )
+
+                if isinstance(packet, EventPacket):
+                    event = packet.details
+
+                    print(f"\nEVENT: {packet.event_code}")
+
+                    if isinstance(event, FastestLapEvent):
+                        print(
+                            f"Fastest lap | "
+                            f"Car {event.vehicle_idx} | "
+                            f"{event.lap_time:.3f}s"
+                        )
+
+                    elif isinstance(event, RetirementEvent):
+                        print(
+                            f"Retirement | "
+                            f"Car {event.vehicle_idx} | "
+                            f"Reason {event.reason}"
+                        )
+
+                    elif isinstance(event, DRSDisabledEvent):
+                        print(
+                            f"DRS disabled | "
+                            f"Reason {event.reason}"
+                        )
+
+                    elif isinstance(event, TeamMateInPitsEvent):
+                        print(
+                            f"Teammate in pits | "
+                            f"Car {event.vehicle_idx}"
+                        )
+
+                    elif isinstance(event, RaceWinnerEvent):
+                        print(
+                            f"Race winner | "
+                            f"Car {event.vehicle_idx}"
+                        )
+
+                    elif isinstance(event, PenaltyEvent):
+                        print(
+                            f"Penalty | "
+                            f"Car {event.vehicle_idx} | "
+                            f"Type {event.penalty_type} | "
+                            f"Infringement {event.infringement_type} | "
+                            f"{event.time}s | "
+                            f"Lap {event.lap_num}"
+                        )
+
+                    elif isinstance(event, SpeedTrapEvent):
+                        print(
+                            f"Speed trap | "
+                            f"Car {event.vehicle_idx} | "
+                            f"{event.speed:.1f} km/h"
+                        )
+
+                    elif isinstance(event, StartLightsEvent):
+                        print(
+                            f"Start lights | "
+                            f"{event.num_lights} lights"
+                        )
+
+                    elif isinstance(event, DriveThroughServedEvent):
+                        print(
+                            f"Drive-through served | "
+                            f"Car {event.vehicle_idx}"
+                        )
+
+                    elif isinstance(event, StopGoServedEvent):
+                        print(
+                            f"Stop-go served | "
+                            f"Car {event.vehicle_idx} | "
+                            f"{event.stop_time:.2f}s"
+                        )
+
+                    elif isinstance(event, FlashbackEvent):
+                        print(
+                            f"Flashback | "
+                            f"Frame {event.flashback_frame_identifier} | "
+                            f"Session time {event.flashback_session_time:.2f}s"
+                        )
+
+                    elif isinstance(event, ButtonsEvent):
+                        print(
+                            f"Buttons | "
+                            f"Status {event.button_status}"
+                        )
+
+                    elif isinstance(event, OvertakeEvent):
+                        print(
+                            f"Overtake | "
+                            f"Car {event.overtaking_vehicle_idx} passed "
+                            f"Car {event.being_overtaken_vehicle_idx}"
+                        )
+
+                    elif isinstance(event, SafetyCarEvent):
+                        print(
+                            f"Safety car | "
+                            f"Type {event.safety_car_type} | "
+                            f"Event {event.event_type}"
+                        )
+
+                    elif isinstance(event, CollisionEvent):
+                        print(
+                            f"Collision | "
+                            f"Car {event.vehicle1_idx} and "
+                            f"Car {event.vehicle2_idx}"
+                        )
+
+                    else:
+                        # for our non detailed event like start
+                        print("No event details")
 
             except NotImplementedError:
                 # Don't do anything for noww

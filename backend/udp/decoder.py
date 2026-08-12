@@ -6,6 +6,7 @@ from udp.car_telemetry import CarTelemetryPacket
 from udp.car_status import CarStatusPacket
 from udp.session import SessionPacket
 from udp.car_damage import CarDamagePacket
+from udp.event import EventPacket
 
 from udp.packet_id import PacketId
 
@@ -50,6 +51,9 @@ def decode_packet(data: bytes):
 
     if packet_id == PacketId.LAP_DATA:
         return LapDataPacket.from_bytes(data)
+
+    if packet_id == PacketId.EVENT:
+        return EventPacket.from_bytes(data)
 
     if packet_id == PacketId.PARTICIPANTS:
         return ParticipantsPacket.from_bytes(data)
