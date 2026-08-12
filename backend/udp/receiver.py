@@ -1,11 +1,14 @@
 import socket
 
+from udp.car_damage import CarDamagePacket
 from udp.participants import ParticipantsPacket
 from udp.decoder import decode_packet
 from udp.motion import MotionPacket
 from udp.lap_data import LapDataPacket
 from udp.car_telemetry import CarTelemetryPacket
 from udp.car_status import CarStatusPacket
+from udp.session import SessionPacket
+
 from udp.recorder import PacketRecorder
 
 import argparse
@@ -62,6 +65,17 @@ def run_receiver(record=False):
                         f"z={player.world_position_z:.2f}"
                     )
 
+                if isinstance(packet, SessionPacket):
+                    print(
+                        f"Session type {packet.session_type} | "
+                        f"Track {packet.track_id} | "
+                        f"{packet.track_length}m | "
+                        f"Weather {packet.weather} | "
+                        f"SC {packet.safety_car_status} | "
+                        f"Marshal zones {packet.num_marshal_zones} | "
+                        f"Forecast samples {packet.num_weather_forecast_samples}"
+                    )
+
                 if isinstance(packet, LapDataPacket):
                     player_index = packet.header.player_car_index
                     player_lap = packet.cars[player_index]
@@ -113,6 +127,19 @@ def run_receiver(record=False):
                         f"Tyre age {status.tyres_age_laps} | "
                         f"ERS {status.ers_store_energy / 1_000_000:.2f}MJ | "
                         f"DRS allowed {status.drs_allowed}"
+                    )
+
+                if isinstance(packet, CarDamagePacket):
+                    player_index = packet.header.player_car_index
+                    damage = packet.cars[player_index]
+
+                    print(
+                        f"Car {player_index}: "
+                        f"Tyre wear {damage.tyres_wear} | "
+                        f"Front lef wing {damage.front_left_wing_damage}% | "
+                        f"Front right wing {damage.front_right_wing_damage}% | "
+                        f"Floor {damage.floor_damage}% | "
+                        f"Engine {damage.engine_damage}%"
                     )
 
             except NotImplementedError:
