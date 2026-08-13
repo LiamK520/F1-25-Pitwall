@@ -1,0 +1,837 @@
+from enum import Enum, IntEnum, IntFlag
+
+
+# This is major lookup table for all flags passed as ints in the UDP spec. See the appendix for more information
+
+class TeamId(IntEnum):
+    MERCEDES = 0
+    FERRARI = 1
+    RED_BULL_RACING = 2
+    WILLIAMS = 3
+    ASTON_MARTIN = 4
+    ALPINE = 5
+    RB = 6
+    HAAS = 7
+    MCLAREN = 8
+    SAUBER = 9
+
+    F1_GENERIC = 41
+    F1_CUSTOM_TEAM = 104
+    KONNERSPORT = 129
+    APXGP_2024 = 142
+    APXGP_2025 = 154
+    KONNERSPORT_2024 = 155
+
+    ART_GP_2024 = 158
+    CAMPOS_2024 = 159
+    RODIN_MOTORSPORT_2024 = 160
+    AIX_RACING_2024 = 161
+    DAMS_2024 = 162
+    HITECH_2024 = 163
+    MP_MOTORSPORT_2024 = 164
+    PREMA_2024 = 165
+    TRIDENT_2024 = 166
+    VAN_AMERSFOORT_RACING_2024 = 167
+    INVICTA_2024 = 168
+
+    MERCEDES_2024 = 185
+    FERRARI_2024 = 186
+    RED_BULL_RACING_2024 = 187
+    WILLIAMS_2024 = 188
+    ASTON_MARTIN_2024 = 189
+    ALPINE_2024 = 190
+    RB_2024 = 191
+    HAAS_2024 = 192
+    MCLAREN_2024 = 193
+    SAUBER_2024 = 194
+
+# note we may not need this as udp gives us driver name anyway
+class DriverId(IntEnum):
+    CARLOS_SAINZ = 0
+    DANIEL_RICCIARDO = 2
+    FERNANDO_ALONSO = 3
+    FELIPE_MASSA = 4
+    LEWIS_HAMILTON = 7
+    MAX_VERSTAPPEN = 9
+    NICO_HULKENBURG = 10
+    KEVIN_MAGNUSSEN = 11
+    SERGIO_PEREZ = 14
+    VALTTERI_BOTTAS = 15
+    ESTEBAN_OCON = 17
+    LANCE_STROLL = 19
+
+    ARRON_BARNES = 20
+    MARTIN_GILES = 21
+    ALEX_MURRAY = 22
+    LUCAS_ROTH = 23
+    IGOR_CORREIA = 24
+    SOPHIE_LEVASSEUR = 25
+    JONAS_SCHIFFER = 26
+    ALAIN_FOREST = 27
+    JAY_LETOURNEAU = 28
+    ESTO_SAARI = 29
+    YASAR_ATIYEH = 30
+    CALLISTO_CALABRESI = 31
+    NAOTA_IZUMI = 32
+    HOWARD_CLARKE = 33
+    LARS_KAUFMANN = 34
+    MARIE_LAURSEN = 35
+    FLAVIO_NIEVES = 36
+    KLIMEK_MICHALSKI = 38
+    SANTIAGO_MORENO = 39
+    BENJAMIN_COPPENS = 40
+    NOAH_VISSER = 41
+
+    GEORGE_RUSSELL = 50
+    LANDO_NORRIS = 54
+    CHARLES_LECLERC = 58
+    PIERRE_GASLY = 59
+    ALEXANDER_ALBON = 62
+
+    RASHID_NAIR = 70
+    JACK_TREMBLAY = 71
+    AYRTON_SENNA = 77
+    GUANYU_ZHOU = 80
+    JUAN_MANUEL_CORREA = 83
+    MICHAEL_SCHUMACHER = 90
+    YUKI_TSUNODA = 94
+
+    AIDAN_JACKSON = 102
+    JENSON_BUTTON = 109
+    DAVID_COULTHARD = 110
+    OSCAR_PIASTRI = 112
+    LIAM_LAWSON = 113
+    RICHARD_VERSCHOOR = 116
+    ENZO_FITTIPALDI = 123
+    MARK_WEBBER = 125
+    JACQUES_VILLENEUVE = 126
+    CALLIE_MAYER = 127
+    LOGAN_SARGEANT = 132
+    JACK_DOOHAN = 136
+    AMAURY_CORDEEL = 137
+    DENNIS_HAUGER = 138
+    ZANE_MALONEY = 145
+    VICTOR_MARTINS = 146
+    OLIVER_BEARMAN = 147
+    JAK_CRAWFORD = 148
+    ISACK_HADJAR = 149
+    ROMAN_STANEK = 152
+    KUSH_MAINI = 153
+
+    BRENDON_LEIGH = 156
+    DAVID_TONIZZA = 157
+    JARNO_OPMEER = 158
+    LUCAS_BLAKELEY = 159
+    PAUL_ARON = 160
+    GABRIEL_BORTOLETO = 161
+    FRANCO_COLAPINTO = 162
+    TAYLOR_BARNARD = 163
+    JOSHUA_DURKSEN = 164
+    ANDREA_KIMI_ANTONELLI = 165
+    RITOMO_MIYATA = 166
+    RAFAEL_VILLAGOMEZ = 167
+    ZAK_OSULLIVAN = 168
+    PEPE_MARTI = 169
+    SONNY_HAYES = 170
+    JOSHUA_PEARCE = 171
+    CALLUM_VOISIN = 172
+    MATIAS_ZAGAZETA = 173
+    NIKOLA_TSOLOV = 174
+    TIM_TRAMNITZ = 175
+
+    LUCA_CORTEZ = 185
+
+    NETWORK_HUMAN = 255
+
+
+class NationalityId(IntEnum):
+    AMERICAN = 1
+    ARGENTINEAN = 2
+    AUSTRALIAN = 3
+    AUSTRIAN = 4
+    AZERBAIJANI = 5
+    BAHRAINI = 6
+    BELGIAN = 7
+    BOLIVIAN = 8
+    BRAZILIAN = 9
+    BRITISH = 10
+    BULGARIAN = 11
+    CAMEROONIAN = 12
+    CANADIAN = 13
+    CHILEAN = 14
+    CHINESE = 15
+    COLOMBIAN = 16
+    COSTA_RICAN = 17
+    CROATIAN = 18
+    CYPRIOT = 19
+    CZECH = 20
+    DANISH = 21
+    DUTCH = 22
+    ECUADORIAN = 23
+    ENGLISH = 24
+    EMIRIAN = 25
+    ESTONIAN = 26
+    FINNISH = 27
+    FRENCH = 28
+    GERMAN = 29
+    GHANAIAN = 30
+    GREEK = 31
+    GUATEMALAN = 32
+    HONDURAN = 33
+    HONG_KONGER = 34
+    HUNGARIAN = 35
+    ICELANDER = 36
+    INDIAN = 37
+    INDONESIAN = 38
+    IRISH = 39
+    ISRAELI = 40
+    ITALIAN = 41
+    JAMAICAN = 42
+    JAPANESE = 43
+    JORDANIAN = 44
+    KUWAITI = 45
+    LATVIAN = 46
+    LEBANESE = 47
+    LITHUANIAN = 48
+    LUXEMBOURGER = 49
+    MALAYSIAN = 50
+    MALTESE = 51
+    MEXICAN = 52
+    MONEGASQUE = 53
+    NEW_ZEALANDER = 54
+    NICARAGUAN = 55
+    NORTHERN_IRISH = 56
+    NORWEGIAN = 57
+    OMANI = 58
+    PAKISTANI = 59
+    PANAMANIAN = 60
+    PARAGUAYAN = 61
+    PERUVIAN = 62
+    POLISH = 63
+    PORTUGUESE = 64
+    QATARI = 65
+    ROMANIAN = 66
+    RUSSIAN = 67
+    SALVADORAN = 68
+    SAUDI = 69
+    SCOTTISH = 70
+    SERBIAN = 71
+    SINGAPOREAN = 72
+    SLOVAKIAN = 73
+    SLOVENIAN = 74
+    SOUTH_KOREAN = 75
+    SOUTH_AFRICAN = 76
+    SPANISH = 77
+    SWEDISH = 78
+    SWISS = 79
+    THAI = 80
+    TURKISH = 81
+    URUGUAYAN = 82
+    UKRAINIAN = 83
+    VENEZUELAN = 84
+    BARBADIAN = 85
+    WELSH = 86
+    VIETNAMESE = 87
+    ALGERIAN = 88
+    BOSNIAN = 89
+    FILIPINO = 90
+
+
+class TrackId(IntEnum):
+    MELBOURNE = 0
+    SHANGHAI = 2
+    SAKHIR = 3
+    CATALUNYA = 4
+    MONACO = 5
+    MONTREAL = 6
+    SILVERSTONE = 7
+    HUNGARORING = 9
+    SPA = 10
+    MONZA = 11
+    SINGAPORE = 12
+    SUZUKA = 13
+    ABU_DHABI = 14
+    TEXAS = 15
+    BRAZIL = 16
+    AUSTRIA = 17
+    MEXICO = 19
+    BAKU = 20
+    ZANDVOORT = 26
+    IMOLA = 27
+    JEDDAH = 29
+    MIAMI = 30
+    LAS_VEGAS = 31
+    LOSAIL = 32
+
+    SILVERSTONE_REVERSE = 39
+    AUSTRIA_REVERSE = 40
+    ZANDVOORT_REVERSE = 41
+
+
+class SessionType(IntEnum):
+    UNKNOWN = 0
+
+    PRACTICE_1 = 1
+    PRACTICE_2 = 2
+    PRACTICE_3 = 3
+    SHORT_PRACTICE = 4
+
+    QUALIFYING_1 = 5
+    QUALIFYING_2 = 6
+    QUALIFYING_3 = 7
+    SHORT_QUALIFYING = 8
+    ONE_SHOT_QUALIFYING = 9
+
+    SPRINT_SHOOTOUT_1 = 10
+    SPRINT_SHOOTOUT_2 = 11
+    SPRINT_SHOOTOUT_3 = 12
+    SHORT_SPRINT_SHOOTOUT = 13
+    ONE_SHOT_SPRINT_SHOOTOUT = 14
+
+    RACE = 15
+    RACE_2 = 16
+    RACE_3 = 17
+
+    TIME_TRIAL = 18
+
+
+class GameMode(IntEnum):
+    GRAND_PRIX_2023 = 4
+    TIME_TRIAL = 5
+    SPLITSCREEN = 6
+    ONLINE_CUSTOM = 7
+    ONLINE_WEEKLY_EVENT = 15
+    BRAKING_POINT = 17
+
+    MY_TEAM_CAREER_2025 = 27
+    DRIVER_CAREER_2025 = 28
+    CAREER_2025_ONLINE = 29
+    CHALLENGE_CAREER_2025 = 30
+
+    APXGP_STORY_MODE = 75
+
+    BENCHMARK = 127
+
+
+class Ruleset(IntEnum):
+    PRACTICE_AND_QUALIFYING = 0
+    RACE = 1
+    TIME_TRIAL = 2
+    ELIMINATION = 12
+
+
+class SurfaceType(IntEnum):
+    TARMAC = 0
+    RUMBLE_STRIP = 1
+    CONCRETE = 2
+    ROCK = 3
+    GRAVEL = 4
+    MUD = 5
+    SAND = 6
+    GRASS = 7
+    WATER = 8
+    COBBLESTONE = 9
+    METAL = 10
+    RIDGED = 11
+
+
+class ButtonFlag(IntFlag):
+    CROSS_A = 0x00000001
+    TRIANGLE_Y = 0x00000002
+    CIRCLE_B = 0x00000004
+    SQUARE_X = 0x00000008
+
+    DPAD_LEFT = 0x00000010
+    DPAD_RIGHT = 0x00000020
+    DPAD_UP = 0x00000040
+    DPAD_DOWN = 0x00000080
+
+    OPTIONS_MENU = 0x00000100
+
+    L1_LB = 0x00000200
+    R1_RB = 0x00000400
+    L2_LT = 0x00000800
+    R2_RT = 0x00001000
+
+    LEFT_STICK_CLICK = 0x00002000
+    RIGHT_STICK_CLICK = 0x00004000
+
+    RIGHT_STICK_LEFT = 0x00008000
+    RIGHT_STICK_RIGHT = 0x00010000
+    RIGHT_STICK_UP = 0x00020000
+    RIGHT_STICK_DOWN = 0x00040000
+
+    SPECIAL = 0x00080000
+
+    UDP_ACTION_1 = 0x00100000
+    UDP_ACTION_2 = 0x00200000
+    UDP_ACTION_3 = 0x00400000
+    UDP_ACTION_4 = 0x00800000
+    UDP_ACTION_5 = 0x01000000
+    UDP_ACTION_6 = 0x02000000
+    UDP_ACTION_7 = 0x04000000
+    UDP_ACTION_8 = 0x08000000
+    UDP_ACTION_9 = 0x10000000
+    UDP_ACTION_10 = 0x20000000
+    UDP_ACTION_11 = 0x40000000
+    UDP_ACTION_12 = 0x80000000
+
+
+class PenaltyType(IntEnum):
+    DRIVE_THROUGH = 0
+    STOP_GO = 1
+    GRID_PENALTY = 2
+    PENALTY_REMINDER = 3
+    TIME_PENALTY = 4
+    WARNING = 5
+    DISQUALIFIED = 6
+    REMOVED_FROM_FORMATION_LAP = 7
+    PARKED_TOO_LONG_TIMER = 8
+    TYRE_REGULATIONS = 9
+    THIS_LAP_INVALIDATED = 10
+    THIS_AND_NEXT_LAP_INVALIDATED = 11
+    THIS_LAP_INVALIDATED_WITHOUT_REASON = 12
+    THIS_AND_NEXT_LAP_INVALIDATED_WITHOUT_REASON = 13
+    THIS_AND_PREVIOUS_LAP_INVALIDATED = 14
+    THIS_AND_PREVIOUS_LAP_INVALIDATED_WITHOUT_REASON = 15
+    RETIRED = 16
+    BLACK_FLAG_TIMER = 17
+
+
+class InfringementType(IntEnum):
+    BLOCKING_BY_SLOW_DRIVING = 0
+    BLOCKING_BY_WRONG_WAY_DRIVING = 1
+    REVERSING_OFF_START_LINE = 2
+    BIG_COLLISION = 3
+    SMALL_COLLISION = 4
+    COLLISION_FAILED_TO_HAND_BACK_POSITION_SINGLE = 5
+    COLLISION_FAILED_TO_HAND_BACK_POSITION_MULTIPLE = 6
+    CORNER_CUTTING_GAINED_TIME = 7
+    CORNER_CUTTING_OVERTAKE_SINGLE = 8
+    CORNER_CUTTING_OVERTAKE_MULTIPLE = 9
+    CROSSED_PIT_EXIT_LANE = 10
+    IGNORING_BLUE_FLAGS = 11
+    IGNORING_YELLOW_FLAGS = 12
+    IGNORING_DRIVE_THROUGH = 13
+    TOO_MANY_DRIVE_THROUGHS = 14
+    DRIVE_THROUGH_REMINDER_SERVE_WITHIN_N_LAPS = 15
+    DRIVE_THROUGH_REMINDER_SERVE_THIS_LAP = 16
+    PIT_LANE_SPEEDING = 17
+    PARKED_FOR_TOO_LONG = 18
+    IGNORING_TYRE_REGULATIONS = 19
+    TOO_MANY_PENALTIES = 20
+    MULTIPLE_WARNINGS = 21
+    APPROACHING_DISQUALIFICATION = 22
+    TYRE_REGULATIONS_SELECT_SINGLE = 23
+    TYRE_REGULATIONS_SELECT_MULTIPLE = 24
+    LAP_INVALIDATED_CORNER_CUTTING = 25
+    LAP_INVALIDATED_RUNNING_WIDE = 26
+    CORNER_CUTTING_RAN_WIDE_GAINED_TIME_MINOR = 27
+    CORNER_CUTTING_RAN_WIDE_GAINED_TIME_SIGNIFICANT = 28
+    CORNER_CUTTING_RAN_WIDE_GAINED_TIME_EXTREME = 29
+    LAP_INVALIDATED_WALL_RIDING = 30
+    LAP_INVALIDATED_FLASHBACK_USED = 31
+    LAP_INVALIDATED_RESET_TO_TRACK = 32
+    BLOCKING_THE_PITLANE = 33
+    JUMP_START = 34
+    SAFETY_CAR_TO_CAR_COLLISION = 35
+    SAFETY_CAR_ILLEGAL_OVERTAKE = 36
+    SAFETY_CAR_EXCEEDING_ALLOWED_PACE = 37
+    VIRTUAL_SAFETY_CAR_EXCEEDING_ALLOWED_PACE = 38
+    FORMATION_LAP_BELOW_ALLOWED_SPEED = 39
+    FORMATION_LAP_PARKING = 40
+    RETIRED_MECHANICAL_FAILURE = 41
+    RETIRED_TERMINALLY_DAMAGED = 42
+    SAFETY_CAR_FALLING_TOO_FAR_BACK = 43
+    BLACK_FLAG_TIMER = 44
+    UNSERVED_STOP_GO_PENALTY = 45
+    UNSERVED_DRIVE_THROUGH_PENALTY = 46
+    ENGINE_COMPONENT_CHANGE = 47
+    GEARBOX_CHANGE = 48
+    PARC_FERME_CHANGE = 49
+    LEAGUE_GRID_PENALTY = 50
+    RETRY_PENALTY = 51
+    ILLEGAL_TIME_GAIN = 52
+    MANDATORY_PITSTOP = 53
+    ATTRIBUTE_ASSIGNED = 54
+
+
+# these enums are not in appendix, they are defined inline in the udp spec
+
+# session stuff
+
+class Weather(IntEnum):
+    CLEAR = 0
+    LIGHT_CLOUD = 1
+    OVERCAST = 2
+    LIGHT_RAIN = 3
+    HEAVY_RAIN = 4
+    STORM = 5
+
+
+class TemperatureChange(IntEnum):
+    UP = 0
+    DOWN = 1
+    NO_CHANGE = 2
+
+
+class Formula(IntEnum):
+    F1_MODERN = 0
+    F1_CLASSIC = 1
+    F2 = 2
+    F1_GENERIC = 3
+    BETA = 4
+    ESPORTS = 6
+    F1_WORLD = 8
+    F1_ELIMINATION = 9
+
+
+class SafetyCarStatus(IntEnum):
+    NONE = 0
+    FULL = 1
+    VIRTUAL = 2
+    FORMATION_LAP = 3
+
+
+class ForecastAccuracy(IntEnum):
+    PERFECT = 0
+    APPROXIMATE = 1
+
+
+class BrakingAssist(IntEnum):
+    OFF = 0
+    LOW = 1
+    MEDIUM = 2
+    HIGH = 3
+
+
+class GearboxAssist(IntEnum):
+    MANUAL = 1
+    MANUAL_WITH_SUGGESTED_GEAR = 2
+    AUTO = 3
+
+
+class DynamicRacingLine(IntEnum):
+    OFF = 0
+    CORNERS_ONLY = 1
+    FULL = 2
+
+
+class DynamicRacingLineType(IntEnum):
+    TWO_D = 0
+    THREE_D = 1
+
+
+class SessionLength(IntEnum):
+    NONE = 0
+    VERY_SHORT = 2
+    SHORT = 3
+    MEDIUM = 4
+    MEDIUM_LONG = 5
+    LONG = 6
+    FULL = 7
+
+
+class SpeedUnit(IntEnum):
+    MPH = 0
+    KPH = 1
+
+
+class TemperatureUnit(IntEnum):
+    CELSIUS = 0
+    FAHRENHEIT = 1
+
+
+class EqualCarPerformance(IntEnum):
+    REALISTIC = 0
+    EQUAL = 1
+
+
+class RecoveryMode(IntEnum):
+    NONE = 0
+    FLASHBACKS = 1
+    AUTO_RECOVERY = 2
+
+
+class FlashbackLimit(IntEnum):
+    LOW = 0
+    MEDIUM = 1
+    HIGH = 2
+    UNLIMITED = 3
+
+
+class SurfaceSimulation(IntEnum):
+    SIMPLIFIED = 0
+    REALISTIC = 1
+
+
+class LowFuelMode(IntEnum):
+    EASY = 0
+    HARD = 1
+
+
+class RaceStartMode(IntEnum):
+    MANUAL = 0
+    ASSISTED = 1
+
+
+class TyreTemperatureMode(IntEnum):
+    SURFACE_ONLY = 0
+    SURFACE_AND_CARCASS = 1
+
+
+class CarDamageLevel(IntEnum):
+    OFF = 0
+    REDUCED = 1
+    STANDARD = 2
+    SIMULATION = 3
+
+
+class CarDamageRate(IntEnum):
+    REDUCED = 0
+    STANDARD = 1
+    SIMULATION = 2
+
+
+class CollisionMode(IntEnum):
+    OFF = 0
+    PLAYER_TO_PLAYER_OFF = 1
+    ON = 2
+
+
+class CornerCuttingStringency(IntEnum):
+    REGULAR = 0
+    STRICT = 1
+
+
+class PitStopExperience(IntEnum):
+    AUTOMATIC = 0
+    BROADCAST = 1
+    IMMERSIVE = 2
+
+
+class FrequencySetting(IntEnum):
+    """Frequency of safety cars and red flags"""
+
+    OFF = 0
+    REDUCED = 1
+    STANDARD = 2
+    INCREASED = 3
+
+
+class BroadcastExperience(IntEnum):
+    """Camera mode for pit stops and safety cars"""
+
+    BROADCAST = 0
+    IMMERSIVE = 1
+
+
+# lap and race enums
+
+class PitStatus(IntEnum):
+    NONE = 0
+    PITTING = 1
+    IN_PIT_AREA = 2
+
+
+class Sector(IntEnum):
+    SECTOR_1 = 0
+    SECTOR_2 = 1
+    SECTOR_3 = 2
+
+
+class DriverStatus(IntEnum):
+    IN_GARAGE = 0
+    FLYING_LAP = 1
+    IN_LAP = 2
+    OUT_LAP = 3
+    ON_TRACK = 4
+
+
+class ResultStatus(IntEnum):
+    INVALID = 0
+    INACTIVE = 1
+    ACTIVE = 2
+    FINISHED = 3
+    DID_NOT_FINISH = 4
+    DISQUALIFIED = 5
+    NOT_CLASSIFIED = 6
+    RETIRED = 7
+
+
+class ResultReason(IntEnum):
+    INVALID = 0
+    RETIRED = 1
+    FINISHED = 2
+    TERMINAL_DAMAGE = 3
+    INACTIVE = 4
+    NOT_ENOUGH_LAPS_COMPLETED = 5
+    BLACK_FLAGGED = 6
+    RED_FLAGGED = 7
+    MECHANICAL_FAILURE = 8
+    SESSION_SKIPPED = 9
+    SESSION_SIMULATED = 10
+
+
+# telemetry enums
+
+class Gear(IntEnum):
+    REVERSE = -1
+    NEUTRAL = 0
+    GEAR_1 = 1
+    GEAR_2 = 2
+    GEAR_3 = 3
+    GEAR_4 = 4
+    GEAR_5 = 5
+    GEAR_6 = 6
+    GEAR_7 = 7
+    GEAR_8 = 8
+
+
+class MFDPanel(IntEnum):
+    """
+    Current mfd screen open in singleplyer. These values may vary depending on game mode.
+    """
+
+    CAR_SETUP = 0
+    PITS = 1
+    DAMAGE = 2
+    ENGINE = 3
+    TEMPERATURES = 4
+    CLOSED = 255
+
+
+class TractionControl(IntEnum):
+    OFF = 0
+    MEDIUM = 1
+    FULL = 2
+
+
+class FuelMix(IntEnum):
+    LEAN = 0
+    STANDARD = 1
+    RICH = 2
+    MAX = 3
+
+
+class ActualTyreCompound(IntEnum):
+    INTERMEDIATE = 7
+    WET = 8
+
+    CLASSIC_DRY = 9
+    CLASSIC_WET = 10
+
+    F2_SUPER_SOFT = 11
+    F2_SOFT = 12
+    F2_MEDIUM = 13
+    F2_HARD = 14
+    F2_WET = 15
+
+    F1_C5 = 16
+    F1_C4 = 17
+    F1_C3 = 18
+    F1_C2 = 19
+    F1_C1 = 20
+    F1_C0 = 21
+    F1_C6 = 22
+
+
+class VisualTyreCompound(IntEnum):
+    INTERMEDIATE = 7
+    WET = 8
+
+    F2_WET = 15
+
+    SOFT = 16
+    MEDIUM = 17
+    HARD = 18
+
+    F2_SUPER_SOFT = 19
+    F2_SOFT = 20
+    F2_MEDIUM = 21
+    F2_HARD = 22
+
+
+class FIAFlag(IntEnum):
+    INVALID = -1
+    NONE = 0
+    GREEN = 1
+    BLUE = 2
+    YELLOW = 3
+
+
+class ERSDeployMode(IntEnum):
+    NONE = 0
+    MEDIUM = 1
+    HOTLAP = 2
+    OVERTAKE = 3
+
+
+# participants
+
+class TelemetryRestriction(IntEnum):
+    RESTRICTED = 0
+    PUBLIC = 1
+
+
+class Platform(IntEnum):
+    STEAM = 1
+    PLAYSTATION = 3
+    XBOX = 4
+    ORIGIN = 6
+    UNKNOWN = 255
+
+
+class LobbyReadyStatus(IntEnum):
+    NOT_READY = 0
+    READY = 1
+    SPECTATING = 2
+
+
+# events
+
+class EventCode(str, Enum):
+    SESSION_STARTED = "SSTA"
+    SESSION_ENDED = "SEND"
+    FASTEST_LAP = "FTLP"
+    RETIREMENT = "RTMT"
+    DRS_ENABLED = "DRSE"
+    DRS_DISABLED = "DRSD"
+    TEAMMATE_IN_PITS = "TMPT"
+    CHEQUERED_FLAG = "CHQF"
+    RACE_WINNER = "RCWN"
+    PENALTY = "PENA"
+    SPEED_TRAP = "SPTP"
+    START_LIGHTS = "STLG"
+    LIGHTS_OUT = "LGOT"
+    DRIVE_THROUGH_SERVED = "DTSV"
+    STOP_GO_SERVED = "SGSV"
+    FLASHBACK = "FLBK"
+    BUTTON_STATUS = "BUTN"
+    RED_FLAG = "RDFL"
+    OVERTAKE = "OVTK"
+    SAFETY_CAR = "SCAR"
+    COLLISION = "COLL"
+
+
+class DRSDisabledReason(IntEnum):
+    WET_TRACK = 0
+    SAFETY_CAR_DEPLOYED = 1
+    RED_FLAG = 2
+    MIN_LAP_NOT_REACHED = 3
+
+
+class SafetyCarEventType(IntEnum):
+    DEPLOYED = 0
+    RETURNING = 1
+    RETURNED = 2
+    RESUME_RACE = 3
+
+
+# history
+
+class LapValidityFlag(IntFlag):
+    LAP_VALID = 0x01
+    SECTOR_1_VALID = 0x02
+    SECTOR_2_VALID = 0x04
+    SECTOR_3_VALID = 0x08

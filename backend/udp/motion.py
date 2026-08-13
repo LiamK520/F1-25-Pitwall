@@ -93,7 +93,7 @@ class MotionPacket:
     cars: tuple[CarMotionData, ...]
 
     @classmethod
-    def from_bytes(cls, data: bytes):
+    def from_bytes(cls, data: bytes) -> "MotionPacket":
         if len(data) != MOTION_PACKET_SIZE:
             raise ValueError(
                 f"Error: Invalid motion packet size. Expected {MOTION_PACKET_SIZE} but got {len(data)}"

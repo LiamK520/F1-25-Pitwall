@@ -284,7 +284,7 @@ EventDetails = (
 
 # event packet#
 
-def parse_event_details(event_code: str, data: bytes, offset: int):
+def parse_event_details(event_code: str, data: bytes, offset: int) -> EventDetails:
     if event_code == "FTLP":
         vehicle_idx, lap_time = FASTEST_LAP_STRUCT.unpack_from(data, offset)
         return FastestLapEvent(

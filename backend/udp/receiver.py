@@ -11,6 +11,8 @@ from udp.session import SessionPacket
 
 from udp.recorder import PacketRecorder
 
+from state.application_state import ApplicationState
+
 #maybe consider import * as long
 from udp.event import (
     EventPacket,
@@ -59,6 +61,8 @@ def run_receiver(record=False):
     if record:
         recorder.open()
 
+    state = ApplicationState()
+
     print(f"Listening for F1 25 UDP data on port {UDP_PORT}")
 
     try:
@@ -72,6 +76,32 @@ def run_receiver(record=False):
                 if record:
                     recorder.record_packet(data)
                 packet = decode_packet(data)
+
+                state.update(packet)
+
+                if isinstance(packet, CarDamagePacket):
+                    car = state.player_car
+
+                    if (
+                        car is not None
+                        and car.participant is not None
+                        and car.lap is not None
+                        and car.telemetry is not None
+                        and car.status is not None
+                        and car.damage is not None
+                    ):
+                        print(
+                            f"\nSTATE | "
+                            f"{car.participant.name} | "
+                            f"P{car.lap.car_position} | "
+                            f"Lap {car.lap.current_lap_num} | "
+                            f"{car.telemetry.speed} km/h | "
+                            f"Fuel {car.status.fuel_in_tank:.1f}kg | "
+                            f"Tyre wear {car.damage.tyres_wear}"
+                        )
+
+                # for now just to see if state is working
+                continue
 
                 if isinstance(packet, MotionPacket):
                     # print player's position
