@@ -78,9 +78,11 @@ def run_receiver(record=False):
                 packet = decode_packet(data)
 
                 state.update(packet)
+                i = 0
 
                 if isinstance(packet, CarDamagePacket):
                     car = state.player_car
+
 
                     if (
                         car is not None
@@ -98,7 +100,13 @@ def run_receiver(record=False):
                             f"{car.telemetry.speed} km/h | "
                             f"Fuel {car.status.fuel_in_tank:.1f}kg | "
                             f"Tyre wear {car.damage.tyres_wear}"
-                        )
+                        ) 
+
+                        if i % 20 == 0:
+                            print(f"HISTORY | {car.current_lap_history.speed}")
+                            i = 0
+
+                        i += 1
 
                 # for now just to see if state is working
                 continue

@@ -14,6 +14,8 @@ from udp.car_damage import CarDamageData,CarDamagePacket
 from udp.session import SessionPacket
 from udp.event import EventPacket
 
+from state.history import LapTelemetry, LapTelemetryBuffer
+
 
 @dataclass
 class CarState:
@@ -28,6 +30,10 @@ class CarState:
     telemetry: CarTelemetryData | None = None
     status: CarStatusData | None = None
     damage: CarDamageData | None = None
+
+    current_lap_history: LapTelemetryBuffer | None = None
+
+    completed_laps_history: list[LapTelemetry] = field(default_factory=list)
 
 
 @dataclass
@@ -143,11 +149,21 @@ class ApplicationState:
 
     def _update_lap_data(self, packet: LapDataPacket) -> None:
         for i, lap in enumerate(packet.cars):
-            self.cars[i].lap = lap
+            car = self.cars[i]
+
+            previous_lap = car.lap
+
+            self._update_lap_history(car, previous_lap, lap)
+
+            car.lap = lap
 
     def _update_telemetry(self, packet: CarTelemetryPacket) -> None:
         for i, telem in enumerate(packet.cars):
-            self.cars[i].telemetry = telem
+            car = self.cars[i]
+
+            car.telemetry = telem
+
+            self._record_telemetry_sample(car=car, telemetry=telem, session_time=packet.header.session_time)
 
     def _update_status(self, packet: CarStatusPacket) -> None:
         for i, status in enumerate(packet.cars):
@@ -156,3 +172,90 @@ class ApplicationState:
     def _update_damage(self, packet: CarDamagePacket) -> None:
         for i, dmg in enumerate(packet.cars):
             self.cars[i].damage = dmg
+
+    # TODO: flashback will need to be handled somehow. figure that out later
+    def _record_telemetry_sample(self, car:CarState, telemetry: CarTelemetryData, session_time: float) -> None:
+        """add a telemetry sample to the current buffer"""
+
+        if car.lap is None:
+            return
+
+        if car.current_lap_history is None:
+            return
+
+        # guard to ensure we don't write into wrong lap
+        if car.current_lap_history.lap_number != car.lap.current_lap_num:
+            return
+
+        car.current_lap_history.append(
+            session_time=session_time,
+            lap_distance=car.lap.lap_distance,
+            speed=telemetry.speed,
+            throttle=telemetry.throttle,
+            brake=telemetry.brake,
+            steer=telemetry.steer,
+            gear=telemetry.gear,
+            engine_rpm=telemetry.engine_rpm,
+            drs=bool(telemetry.drs),
+        )
+
+    def _update_lap_history(self, car: CarState, previous_lap: LapData | None, new_lap: LapData) -> None:
+        """
+        Starts/completes/replaces the telemetry buffer for a car's current lap.
+
+        A higher new lap signals a completed lap and the telemetry is recorded. An unexpected (lower) new lap means we replace the current buffer
+        without sving it to avoid incorrect record.
+        """
+
+        new_lap_number = new_lap.current_lap_num
+
+        # no hist for before race
+        if new_lap_number == 0:
+            return
+
+        if car.current_lap_history is None:
+            car.current_lap_history = LapTelemetryBuffer(lap_number=new_lap_number)
+            return
+
+        current_lap_number = car.current_lap_history.lap_number
+
+        # still same lap do nothing
+        if current_lap_number == new_lap_number:
+            return
+
+        # normal nice lap
+        # for now don't consider strange gaps like 4 to 6
+        if new_lap_number > current_lap_number:
+            self._complete_lap_history(car, previous_lap, new_lap)
+
+        # start new buffer for new lap
+        # hopefully handles stuff like flashback
+        car.current_lap_history = LapTelemetryBuffer(new_lap_number)
+
+    def _complete_lap_history(self, car: CarState, previous_lap: LapData | None, new_lap: LapData) -> None:
+        """finalise car's current telemetry buffer into a complted lap"""
+
+        buffer = car.current_lap_history
+
+        if buffer is None:
+            return
+
+        # useless data, nothin sampled
+        if not buffer.lap_distance:
+            return
+
+        # get time of finsiehd lap
+        lap_time = new_lap.last_lap_time_ms
+
+        # make none for calrity
+        if lap_time == 0:
+            lap_time = None
+
+        valid = True
+
+        if previous_lap:
+            valid = not bool(previous_lap.current_lap_invalid)
+
+        completed = buffer.finish(lap_time_ms=lap_time, valid=valid)
+
+        car.completed_laps_history.append(completed)
