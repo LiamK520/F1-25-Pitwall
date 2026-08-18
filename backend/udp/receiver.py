@@ -33,6 +33,11 @@ from udp.event import (
     CollisionEvent,
 )
 
+from udp.session_history import SessionHistoryPacket
+from udp.tyre_sets import TyreSetsPacket
+from udp.final_classification import FinalClassificationPacket
+from udp.lap_positions import LapPositionsPacket
+
 import argparse
 
 # maybe change to loopback later
@@ -109,7 +114,7 @@ def run_receiver(record=False):
                         i += 1
 
                 # for now just to see if state is working
-                continue
+                #continue
 
                 if isinstance(packet, MotionPacket):
                     # print player's position
@@ -199,6 +204,109 @@ def run_receiver(record=False):
                         f"Floor {damage.floor_damage}% | "
                         f"Engine {damage.engine_damage}%"
                     )
+
+                if isinstance(packet, SessionHistoryPacket):
+                    if packet.car_idx == packet.header.player_car_index:
+                        car = state.cars[packet.car_idx]
+
+                        name = (
+                            car.participant.name
+                            if car.participant is not None
+                            else f"Car {packet.car_idx}"
+                        )
+
+                        print(
+                            f"\nSESSION HISTORY | "
+                            f"{name} | "
+                            f"Laps {packet.num_laps} | "
+                            f"Tyre stints {packet.num_tyre_stints} | "
+                            f"Best lap #{packet.best_lap_time_lap_num}"
+                        )
+
+                        if packet.lap_history:
+                            latest = packet.lap_history[-1]
+
+                            print(
+                                f"Latest history entry | "
+                                f"{latest.lap_time_in_ms}ms | "
+                                f"Validity flags {latest.lap_valid_bit_flags:#04x}"
+                            )
+
+                        if packet.tyre_stints:
+                            stint = packet.tyre_stints[-1]
+
+                            print(
+                                f"Current/latest stint | "
+                                f"End lap {stint.end_lap} | "
+                                f"Actual compound {stint.tyre_actual_compound} | "
+                                f"Visual compound {stint.tyre_visual_compound}"
+                            )
+
+                if isinstance(packet, TyreSetsPacket):
+                    if packet.car_idx == packet.header.player_car_index:
+                        car = state.cars[packet.car_idx]
+
+                        name = (
+                            car.participant.name
+                            if car.participant is not None
+                            else f"Car {packet.car_idx}"
+                        )
+
+                        print(
+                            f"\nTYRE SETS | "
+                            f"{name} | "
+                            f"Fitted index {packet.fitted_idx}"
+                        )
+
+                        if packet.fitted_idx < len(packet.tyre_sets):
+                            fitted = packet.tyre_sets[
+                                packet.fitted_idx
+                            ]
+
+                            print(
+                                f"Fitted set | "
+                                f"Actual {fitted.actual_tyre_compound} | "
+                                f"Visual {fitted.visual_tyre_compound} | "
+                                f"Wear {fitted.wear}% | "
+                                f"Life {fitted.life_span} | "
+                                f"Usable life {fitted.usable_life} | "
+                                f"Delta {fitted.lap_delta_time}ms | "
+                                f"Available {fitted.available}"
+                            )
+
+                if isinstance(packet, FinalClassificationPacket):
+                    print(
+                        f"\nFINAL CLASSIFICATION | "
+                        f"{packet.num_cars} cars"
+                    )
+
+                    for result in packet.classifications:
+                        print(
+                            f"P{result.position} | "
+                            f"Laps {result.num_laps} | "
+                            f"Grid {result.grid_position} | "
+                            f"Best {result.best_lap_time_in_ms}ms | "
+                            f"Race time {result.total_race_time:.3f}s | "
+                            f"Penalties {result.penalties_time}s | "
+                            f"Status {result.result_status} | "
+                            f"Reason {result.result_reason}"
+                        )
+
+                if isinstance(packet, LapPositionsPacket):
+                    print(
+                        f"LAP POSITIONS | "
+                        f"laps={packet.num_laps} | "
+                        f"start={packet.lap_start}"
+                    )
+
+                    if packet.position_for_vehicle_idx:
+                        latest = packet.position_for_vehicle_idx[-1]
+
+                        print(
+                            f"Latest row | "
+                            f"player position="
+                            f"{latest[packet.header.player_car_index]}"
+                        )
 
                 if isinstance(packet, EventPacket):
                     event = packet.details

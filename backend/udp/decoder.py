@@ -7,6 +7,10 @@ from udp.car_status import CarStatusPacket
 from udp.session import SessionPacket
 from udp.car_damage import CarDamagePacket
 from udp.event import EventPacket
+from udp.session_history import SessionHistoryPacket
+from udp.tyre_sets import TyreSetsPacket
+from udp.final_classification import FinalClassificationPacket
+from udp.lap_positions import LapPositionsPacket
 
 from udp.packet_id import PacketId
 
@@ -64,8 +68,20 @@ def decode_packet(data: bytes):
     if packet_id == PacketId.CAR_STATUS:
         return CarStatusPacket.from_bytes(data)
 
+    if packet_id == PacketId.FINAL_CLASSIFICATION:
+        return FinalClassificationPacket.from_bytes(data)
+
     if packet_id == PacketId.CAR_DAMAGE:
         return CarDamagePacket.from_bytes(data)
+
+    if packet_id == PacketId.SESSION_HISTORY:
+        return SessionHistoryPacket.from_bytes(data)
+
+    if packet_id == PacketId.TYRE_SETS:
+        return TyreSetsPacket.from_bytes(data)
+
+    if packet_id == PacketId.LAP_POSITIONS:
+        return LapPositionsPacket.from_bytes(data)
 
     raise NotImplementedError(
         f"Packet type {packet_id.name} is not implemented yet"
