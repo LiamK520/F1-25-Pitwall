@@ -103,9 +103,7 @@ def test_lap_positions_preserves_zero_position():
 
 
 def test_lap_positions_only_stores_num_laps():
-    packet = LapPositionsPacket.from_bytes(
-        make_lap_positions_packet(num_laps=2)
-    )
+    packet = LapPositionsPacket.from_bytes(make_lap_positions_packet(num_laps=2))
 
     assert len(packet.position_for_vehicle_idx) == 2
 
@@ -114,9 +112,7 @@ def test_lap_positions_rejects_wrong_packet_size():
     data = make_lap_positions_packet()
 
     with pytest.raises(ValueError):
-        LapPositionsPacket.from_bytes(
-            data[:-1]
-        )
+        LapPositionsPacket.from_bytes(data[:-1])
 
 
 def test_lap_positions_rejects_too_many_laps():
@@ -128,6 +124,4 @@ def test_lap_positions_rejects_too_many_laps():
     data[HEADER_SIZE] = MAX_NUM_LAPS_IN_LAP_POSITIONS_HISTORY_PACKET + 1
 
     with pytest.raises(ValueError,match="num_laps"):
-        LapPositionsPacket.from_bytes(
-            bytes(data)
-        )
+        LapPositionsPacket.from_bytes(bytes(data))

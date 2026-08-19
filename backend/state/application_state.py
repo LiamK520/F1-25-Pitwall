@@ -13,6 +13,11 @@ from udp.car_status import CarStatusData,CarStatusPacket
 from udp.car_damage import CarDamageData,CarDamagePacket
 from udp.session import SessionPacket
 from udp.event import EventPacket
+from udp.session_history import SessionHistoryPacket
+from udp.tyre_sets import TyreSetsPacket
+from udp.car_setup import CarSetupData, CarSetupPacket
+from udp.lap_positions import LapPositionsPacket
+from udp.final_classification import FinalClassificationPacket
 
 from state.history import LapTelemetry, LapTelemetryBuffer
 
@@ -24,16 +29,23 @@ class CarState:
     """
     index: int
 
+    # live stuff
+
     participant: ParticipantData | None = None
     motion: CarMotionData | None = None
     lap: LapData | None = None
     telemetry: CarTelemetryData | None = None
     status: CarStatusData | None = None
     damage: CarDamageData | None = None
+    setup: CarSetupData | None = None
 
-    current_lap_history: LapTelemetryBuffer | None = None
+    # history from udp
+    session_history: SessionHistoryPacket | None = None
+    tyre_sets: TyreSetsPacket | None = None
 
-    completed_laps_history: list[LapTelemetry] = field(default_factory=list)
+    # telem history
+    current_lap_telemetry: LapTelemetryBuffer | None = None
+    completed_lap_telemetry: dict[int, LapTelemetry] = field(default_factory=dict)
 
 
 @dataclass
@@ -56,9 +68,18 @@ class ApplicationState:
 
     events: list[EventPacket] = field(default_factory=list)
 
+    # position history
+    # key is the lap history index, value is the position for all cars
+    lap_positions: dict[int, tuple[int, ...]] = field(default_factory=dict)
+
+    final_classification: FinalClassificationPacket | None = None
+
     num_active_cars: int = 0
 
     player_car_index: int | None = None
+    # player only value
+    next_front_wing_value: float | None = None
+
     # i dont know if i'll use this but keep for now
     secondary_player_car_index: int | None = None
 
@@ -83,6 +104,10 @@ class ApplicationState:
         self.num_active_cars = 0
         self.player_car_index = None
         self.secondary_player_car_index = None
+
+        self.lap_positions.clear()
+        self.final_classification = None
+        self.next_front_wing_value = None
 
     def update(self, packet) -> None:
         """
@@ -114,6 +139,20 @@ class ApplicationState:
         elif isinstance(packet, EventPacket):
             self.events.append(packet)
 
+        elif isinstance(packet, CarSetupPacket):
+            self._update_setups(packet)
+
+        elif isinstance(packet, SessionHistoryPacket):
+            self._update_session_history(packet)
+
+        elif isinstance(packet, TyreSetsPacket):
+            self._update_tyre_sets(packet)
+
+        elif isinstance(packet, LapPositionsPacket):
+            self._update_lap_positions(packet)
+
+        elif isinstance(packet, FinalClassificationPacket):
+            self.final_classification = packet
 
     def _update_header(self, packet) -> None:
         """
@@ -151,9 +190,7 @@ class ApplicationState:
         for i, lap in enumerate(packet.cars):
             car = self.cars[i]
 
-            previous_lap = car.lap
-
-            self._update_lap_history(car, previous_lap, lap)
+            self._update_lap_telemetry(car, lap)
 
             car.lap = lap
 
@@ -173,6 +210,32 @@ class ApplicationState:
         for i, dmg in enumerate(packet.cars):
             self.cars[i].damage = dmg
 
+    def _update_setups(self, packet: CarSetupPacket) -> None:
+        for i, setup in enumerate(packet.car_setup_data):
+            self.cars[i].setup = setup
+
+        self.next_front_wing_value = packet.next_front_wing_value
+
+    def _update_session_history(self, packet: SessionHistoryPacket) -> None:
+        if packet.car_idx >= NUM_CARS:
+            return
+
+        self.cars[packet.car_idx].session_history = packet
+
+    def _update_tyre_sets(self, packet: TyreSetsPacket) -> None:
+        if packet.car_idx >= NUM_CARS:
+            return
+
+        self.cars[packet.car_idx].tyre_sets = packet
+
+    def _update_lap_positions(self, packet: LapPositionsPacket) -> None:
+        for i, pos in enumerate(packet.position_for_vehicle_idx):
+            # get absolute index by adding lap start to current lap (i)
+            # this allows storage of more than maximum number of laps in udp lap position
+            lap_idx = packet.lap_start + i
+
+            self.lap_positions[lap_idx] = pos
+
     # TODO: flashback will need to be handled somehow. figure that out later
     def _record_telemetry_sample(self, car:CarState, telemetry: CarTelemetryData, session_time: float) -> None:
         """add a telemetry sample to the current buffer"""
@@ -180,14 +243,14 @@ class ApplicationState:
         if car.lap is None:
             return
 
-        if car.current_lap_history is None:
+        if car.current_lap_telemetry is None:
             return
 
         # guard to ensure we don't write into wrong lap
-        if car.current_lap_history.lap_number != car.lap.current_lap_num:
+        if car.current_lap_telemetry.lap_number != car.lap.current_lap_num:
             return
 
-        car.current_lap_history.append(
+        car.current_lap_telemetry.append(
             session_time=session_time,
             lap_distance=car.lap.lap_distance,
             speed=telemetry.speed,
@@ -199,7 +262,7 @@ class ApplicationState:
             drs=bool(telemetry.drs),
         )
 
-    def _update_lap_history(self, car: CarState, previous_lap: LapData | None, new_lap: LapData) -> None:
+    def _update_lap_telemetry(self, car: CarState, new_lap: LapData) -> None:
         """
         Starts/completes/replaces the telemetry buffer for a car's current lap.
 
@@ -213,11 +276,11 @@ class ApplicationState:
         if new_lap_number == 0:
             return
 
-        if car.current_lap_history is None:
-            car.current_lap_history = LapTelemetryBuffer(lap_number=new_lap_number)
+        if car.current_lap_telemetry is None:
+            car.current_lap_telemetry = LapTelemetryBuffer(lap_number=new_lap_number)
             return
 
-        current_lap_number = car.current_lap_history.lap_number
+        current_lap_number = car.current_lap_telemetry.lap_number
 
         # still same lap do nothing
         if current_lap_number == new_lap_number:
@@ -226,16 +289,16 @@ class ApplicationState:
         # normal nice lap
         # for now don't consider strange gaps like 4 to 6
         if new_lap_number > current_lap_number:
-            self._complete_lap_history(car, previous_lap, new_lap)
+            self._complete_lap_telemetry(car)
 
         # start new buffer for new lap
         # hopefully handles stuff like flashback
-        car.current_lap_history = LapTelemetryBuffer(new_lap_number)
+        car.current_lap_telemetry = LapTelemetryBuffer(new_lap_number)
 
-    def _complete_lap_history(self, car: CarState, previous_lap: LapData | None, new_lap: LapData) -> None:
+    def _complete_lap_telemetry(self, car: CarState) -> None:
         """finalise car's current telemetry buffer into a complted lap"""
 
-        buffer = car.current_lap_history
+        buffer = car.current_lap_telemetry
 
         if buffer is None:
             return
@@ -244,18 +307,7 @@ class ApplicationState:
         if not buffer.lap_distance:
             return
 
-        # get time of finsiehd lap
-        lap_time = new_lap.last_lap_time_ms
 
-        # make none for calrity
-        if lap_time == 0:
-            lap_time = None
+        completed = buffer.finish()
 
-        valid = True
-
-        if previous_lap:
-            valid = not bool(previous_lap.current_lap_invalid)
-
-        completed = buffer.finish(lap_time_ms=lap_time, valid=valid)
-
-        car.completed_laps_history.append(completed)
+        car.completed_laps_history[buffer.lap_number] = completed

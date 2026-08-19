@@ -33,7 +33,7 @@ def make_tyre_set(
     )
 
 
-def make_tyre_sets_packet() -> bytes:
+def make_tyre_sets_packet(car_idx=4) -> bytes:
 
     data = make_header(
         PacketId.TYRE_SETS,
@@ -42,7 +42,7 @@ def make_tyre_sets_packet() -> bytes:
 
     data += struct.pack(
         "<B",
-        4,
+        car_idx,
     )
 
     for i in range(NUM_TYRE_SETS):

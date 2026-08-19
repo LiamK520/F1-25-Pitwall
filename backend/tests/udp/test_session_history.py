@@ -47,7 +47,7 @@ def make_tyre_stint_history(
     )
 
 
-def make_session_history_packet() -> bytes:
+def make_session_history_packet(car_idx=4) -> bytes:
 
     data = make_header(
         PacketId.SESSION_HISTORY,
@@ -56,7 +56,7 @@ def make_session_history_packet() -> bytes:
 
     data += struct.pack(
         "<BBBBBBB",
-        4,      # car idx
+        car_idx,      # car idx
         3,      # num laps
         2,      # num tyre stints
         2,      # best lap

@@ -53,19 +53,13 @@ class LapTelemetryBuffer:
 
         self.drs.append(drs)
 
-    def finish(
-        self,
-        lap_time_ms: int | None,
-        valid: bool,
-    ) -> "LapTelemetry":
+    def finish(self) -> "LapTelemetry":
         """
         Converts the buffer into a fixed LapTelemetry dataclass.
         """
 
         return LapTelemetry(
             lap_number=self.lap_number,
-            lap_time_ms=lap_time_ms,
-            valid=valid,
 
             session_time=np.asarray(
                 self.session_time,
@@ -121,9 +115,6 @@ class LapTelemetry:
     """
 
     lap_number: int
-
-    lap_time_ms: int | None
-    valid: bool
 
     session_time: np.ndarray
     lap_distance: np.ndarray

@@ -113,7 +113,7 @@ def run_receiver(record=False):
                         ) 
 
                         if i % 20 == 0:
-                            print(f"HISTORY | {car.current_lap_history.speed}")
+                            print(f"HISTORY | {car.current_lap_telemetry.speed}")
                             i = 0
 
                         i += 1
