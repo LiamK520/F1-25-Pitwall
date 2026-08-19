@@ -54,11 +54,11 @@ def test_decode_motion_packet():
 
 
 def test_known_but_unimplemented_packet():
-    # TODO: This will obviously need to be deleted later
     data = make_header(PacketId.MOTION_EX)
 
-    with pytest.raises(NotImplementedError):
-        decode_packet(data)
+    packet = decode_packet(data)
+
+    assert packet is None
 
 
 def test_unknown_packet_id():

@@ -11,6 +11,7 @@ from udp.session_history import SessionHistoryPacket
 from udp.tyre_sets import TyreSetsPacket
 from udp.final_classification import FinalClassificationPacket
 from udp.lap_positions import LapPositionsPacket
+from udp.car_setup import CarSetupPacket
 
 from udp.packet_id import PacketId
 
@@ -40,6 +41,15 @@ enum PacketId
 
 
 def decode_packet(data: bytes):
+    """
+    Takes a raw UDP packet and decodes it into the appropriate class.
+
+    The packet_id field in the packet header is used to determine the correct packet class. 
+    
+    Note that TimeTrial, MotionEx and LobbyInfo packets are not implemented, and return None.
+
+    Raises a ValueError if the packet is unknown.
+    """
     header = PacketHeader.from_bytes(data)
 
     try:
@@ -62,6 +72,9 @@ def decode_packet(data: bytes):
     if packet_id == PacketId.PARTICIPANTS:
         return ParticipantsPacket.from_bytes(data)
 
+    if packet_id == PacketId.CAR_SETUPS:
+        return CarSetupPacket.from_bytes(data)
+
     if packet_id == PacketId.CAR_TELEMETRY:
         return CarTelemetryPacket.from_bytes(data)
 
@@ -83,6 +96,4 @@ def decode_packet(data: bytes):
     if packet_id == PacketId.LAP_POSITIONS:
         return LapPositionsPacket.from_bytes(data)
 
-    raise NotImplementedError(
-        f"Packet type {packet_id.name} is not implemented yet"
-    )
+    return None

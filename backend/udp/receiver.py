@@ -37,6 +37,7 @@ from udp.session_history import SessionHistoryPacket
 from udp.tyre_sets import TyreSetsPacket
 from udp.final_classification import FinalClassificationPacket
 from udp.lap_positions import LapPositionsPacket
+from udp.car_setup import CarSetupPacket
 
 import argparse
 
@@ -81,6 +82,10 @@ def run_receiver(record=False):
                 if record:
                     recorder.record_packet(data)
                 packet = decode_packet(data)
+
+                if packet is None:
+                    # skip motion ex, lobby info and time trial packets
+                    continue
 
                 state.update(packet)
                 i = 0
@@ -307,6 +312,19 @@ def run_receiver(record=False):
                             f"player position="
                             f"{latest[packet.header.player_car_index]}"
                         )
+
+                if isinstance(packet, CarSetupPacket):
+                    player_idx = packet.header.player_car_index
+                    setup = packet.car_setup_data[player_idx]
+
+                    print(
+                        f"CAR SETUP | Car {player_idx} | "
+                        f"Wings {setup.front_wing}/{setup.rear_wing} | "
+                        f"Diff {setup.on_throttle}/{setup.off_throttle} | "
+                        f"Brake bias {setup.brake_bias}% | "
+                        f"Fuel {setup.fuel_load:.1f}kg | "
+                        f"Next front wing {packet.next_front_wing_value:.1f}"
+                    )
 
                 if isinstance(packet, EventPacket):
                     event = packet.details
