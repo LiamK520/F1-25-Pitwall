@@ -1,4 +1,5 @@
 import pytest
+from dataclasses import replace
 
 from state.application_state import ApplicationState, CarState
 
@@ -11,6 +12,8 @@ from tests.udp.test_session_history import make_session_history_packet
 from tests.udp.test_tyre_sets import make_tyre_sets_packet
 from tests.udp.test_lap_positions import make_lap_positions_packet
 from tests.udp.test_final_classification import make_final_classification_packet
+from tests.udp.test_lap_data import make_lap_data_packet
+from tests.udp.test_car_telemetry import make_car_telemetry_packet
 
 from udp.car_damage import CarDamagePacket
 from udp.constants import NUM_CARS
@@ -22,6 +25,8 @@ from udp.session_history import SessionHistoryPacket
 from udp.tyre_sets import TyreSetsPacket
 from udp.lap_positions import LapPositionsPacket
 from udp.final_classification import FinalClassificationPacket
+from udp.lap_data import LapDataPacket
+from udp.car_telemetry import CarTelemetryPacket
 
 
 def make_damage_packet(
@@ -419,3 +424,301 @@ def test_reset_clears_application_state():
     assert state.lap_positions == {}
     assert state.final_classification is None
     assert state.next_front_wing_value is None
+
+#
+# frame alignment tests
+#
+
+TEST_SESSION_UID = 1234567
+
+TEST_SESSION_UID = 123456789
+
+
+def make_state_lap_packet(
+    frame: int,
+    lap_number: int = 1,
+    lap_distance: float = 500.0,
+) -> LapDataPacket:
+    """
+    makes LapData packet suitable for frame testing
+    """
+
+    data = make_lap_data_packet()
+
+    packet = LapDataPacket.from_bytes(data)
+
+    header = replace(
+        packet.header,
+        session_uid=TEST_SESSION_UID,
+        frame_identifier=frame,
+        overall_frame_identifier=frame,
+        session_time=frame / 60.0,
+    )
+
+    cars = tuple(
+        replace(
+            lap,
+            current_lap_num=lap_number,
+            lap_distance=lap_distance,
+        )
+        for lap in packet.cars
+    )
+
+    return replace(
+        packet,
+        header=header,
+        cars=cars,
+    )
+
+
+def make_state_telemetry_packet(
+    frame: int,
+    speed: int = 321,
+) -> CarTelemetryPacket:
+    """
+    makes car Telemetry packet suitable for frame testing
+    """
+
+    data = make_car_telemetry_packet()
+
+    packet = CarTelemetryPacket.from_bytes(data)
+
+    header = replace(
+        packet.header,
+        session_uid=TEST_SESSION_UID,
+        frame_identifier=frame,
+        overall_frame_identifier=frame,
+        session_time=frame / 60.0,
+    )
+
+    cars = list(packet.cars)
+
+    cars[0] = replace(
+        cars[0],
+        speed=speed,
+    )
+
+    return replace(
+        packet,
+        header=header,
+        cars=tuple(cars),
+    )
+
+# NOTE: If the other packets aligned by frame (e.g. motion) are later added these tests will probably need to be rewritten
+
+def test_frame_alignment_lap_telemetry_records_sample():
+    """
+    Tests that the application state correctly records a telemetry sample after receiving a LapData packet and a CarTelemetry packet
+    with the same overall_frame_identifier
+
+    In this test, the state receives the LapData packet first, then the CarTelemetry packet.
+    """
+    state = ApplicationState()
+
+    lap_packet = make_state_lap_packet(100, 1, 500.0)
+
+    telemetry_packet = make_state_telemetry_packet(frame=100, speed=258)
+
+    # lap arrival first
+    state.update(lap_packet)
+
+    # frame 100 should be in lap buffer but not telem
+    assert 100 in state._lap_data_buffer
+    assert 100 not in state._telemetry_buffer
+
+    car = state.cars[0]
+
+    assert car.current_lap_telemetry is not None
+    assert len(car.current_lap_telemetry.lap_distance) == 0
+
+    # now telem arrives
+    state.update(telemetry_packet)
+
+    # now frame 100 should be in neither buffer due to match
+    assert 100 not in state._lap_data_buffer
+    assert 100 not in state._telemetry_buffer
+
+    assert len(car.current_lap_telemetry.lap_distance) == 1
+    assert car.current_lap_telemetry.lap_distance[0] == pytest.approx(500.0)
+    assert car.current_lap_telemetry.speed[0] == 258
+
+
+def test_frame_alignment_telemetry_lap_records_sample():
+    """
+    Tests that the application state correctly records a telemetry sample after receiving a LapData packet and a CarTelemetry packet
+    with the same overall_frame_identifier
+
+    In this test, the state receives the CarTelemetry packet first, then the LapData packet.
+    """
+        
+    state = ApplicationState()
+
+    lap_packet = make_state_lap_packet(100, 1, 600.0)
+
+    telemetry_packet = make_state_telemetry_packet(frame=100, speed=252)
+
+    # telem arrival first
+    state.update(telemetry_packet)
+
+    # frame 100 should be in telem buffer but not lap
+    assert 100 not in state._lap_data_buffer
+    assert 100 in state._telemetry_buffer
+
+    car = state.cars[0]
+
+    # now telem arrives
+    state.update(lap_packet)
+
+    # now frame 100 should be in neither buffer due to match
+    assert 100 not in state._lap_data_buffer
+    assert 100 not in state._telemetry_buffer
+
+    car = state.cars[0]
+
+    assert car.current_lap_telemetry is not None
+    assert len(car.current_lap_telemetry.lap_distance) == 1
+
+    assert car.current_lap_telemetry.lap_distance[0] == pytest.approx(600.0)
+    assert car.current_lap_telemetry.speed[0] == 252
+
+
+def test_different_frames_dont_record():
+    state = ApplicationState()
+
+    lap_packet = make_state_lap_packet(555, 3, 1232.0)
+    telemetry_packet = make_state_telemetry_packet(556, 323)
+
+    state.update(lap_packet)
+    state.update(telemetry_packet)
+
+    # both should be in buffers
+    assert 555 in state._lap_data_buffer
+    assert 556 in state._telemetry_buffer
+
+    car = state.cars[0]
+
+    # make sure car has no record of telem
+    assert car.current_lap_telemetry is not None
+    assert len(car.current_lap_telemetry.lap_distance) == 0
+
+
+def test_frame_alignment_uses_matched_data():
+    """
+    This tests that, when aligning packets, the correct data for the frame is used, not the most recently received data (in car.lap)
+    """
+
+    state = ApplicationState()
+
+    lap_packet = make_state_lap_packet(100, 1, 500.0)
+    telemetry_packet = make_state_telemetry_packet(100)
+
+    # store lap
+
+    state.update(lap_packet)
+
+    car = state.cars[0]
+
+    assert car.lap is not None
+
+    # create live snapshot that is different to frame 100
+    car.lap = replace(car.lap, lap_distance=155.0)
+
+    state.update(telemetry_packet)
+
+    assert car.current_lap_telemetry is not None
+
+    # stored sample must be from frame 100 not live sample
+    assert car.current_lap_telemetry.lap_distance[0] == pytest.approx(500.0)
+
+
+def test_matched_frame_before_race_does_not_create_history():
+    state = ApplicationState()
+
+    lap_packet = make_state_lap_packet(100, 0, 0.0)
+
+    telemetry_packet = make_state_telemetry_packet(100)
+
+    state.update(lap_packet)
+    state.update(telemetry_packet)
+
+    # lap 0 shoudlnt have telmeetry buffer
+
+    for car in state.cars:
+        assert car.current_lap_telemetry is None
+
+    # packets matched and consumed
+
+    assert 100 not in state._lap_data_buffer
+    assert 100 not in state._telemetry_buffer
+
+
+def test_old_frames_removed():
+    state = ApplicationState()
+
+    lap_packet = make_state_lap_packet(100, 1)
+
+    telemetry_packet = make_state_telemetry_packet(101)
+
+    state.update(lap_packet)
+    state.update(telemetry_packet)
+
+    assert 100 in state._lap_data_buffer
+    assert 101 in state._telemetry_buffer
+
+    # frame 110 shoudl clear 100 out
+
+    new_packet = make_state_lap_packet(110, 1, 505)
+
+    state.update(new_packet)
+
+    assert 100 not in state._lap_data_buffer
+    assert 110 in state._lap_data_buffer
+
+    # 111 should boot out 101
+    newer_packet = make_state_telemetry_packet(111)
+
+    state.update(newer_packet)
+
+    assert 101 not in state._telemetry_buffer
+    assert 111 in state._telemetry_buffer
+
+
+def test_lap_change_completes_buffer():
+    state = ApplicationState()
+
+    # matched samples on lap 1
+    lap_packet_1 = make_state_lap_packet(100, 1, 5000.0)
+    telemetry_packet_1 = make_state_telemetry_packet(100, 250)
+
+    state.update(lap_packet_1)
+    state.update(telemetry_packet_1)
+
+    car = state.cars[0]
+
+    assert car.current_lap_telemetry is not None
+    assert car.current_lap_telemetry.lap_number == 1
+    assert len(car.current_lap_telemetry.lap_distance) == 1
+
+    # next frame crosses line so lap 2
+
+    lap_packet_2 = make_state_lap_packet(101, 2, 5.0)
+    telemetry_packet_2 = make_state_telemetry_packet(101, 255)
+
+    state.update(lap_packet_2)
+    state.update(telemetry_packet_2)
+
+    # lap 1 done
+    assert 1 in car.completed_lap_telemetry
+
+    completed_lap = car.completed_lap_telemetry[1]
+
+    assert len(completed_lap.lap_distance) == 1
+    assert completed_lap.lap_distance[0] == pytest.approx(5000.0)
+    assert completed_lap.speed[0] == 250
+
+    # now check lap 2 is on the go
+    assert car.current_lap_telemetry is not None
+    assert car.current_lap_telemetry.lap_number == 2
+    assert len(car.current_lap_telemetry.lap_distance) == 1
+    assert car.current_lap_telemetry.lap_distance[0] == pytest.approx(5.0)
+    assert car.current_lap_telemetry.speed[0] == 255

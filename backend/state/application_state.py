@@ -82,6 +82,13 @@ class ApplicationState:
 
     # i dont know if i'll use this but keep for now
     secondary_player_car_index: int | None = None
+    
+    # private buffers for syncing
+    _telemetry_buffer: dict[int, CarTelemetryPacket] = field(default_factory=dict)
+    _lap_data_buffer: dict[int, LapDataPacket] = field(default_factory=dict)
+
+    # consts
+    _MAX_FRAME_AGE = 10
 
     @property
     def player_car(self) -> CarState | None:
@@ -108,6 +115,9 @@ class ApplicationState:
         self.lap_positions.clear()
         self.final_classification = None
         self.next_front_wing_value = None
+
+        self._telemetry_buffer.clear()
+        self._lap_data_buffer.clear()
 
     def update(self, packet) -> None:
         """
@@ -194,13 +204,29 @@ class ApplicationState:
 
             car.lap = lap
 
+        frame = packet.header.overall_frame_identifier
+
+        self._lap_data_buffer[frame] = packet
+
+        self._try_frame_match(frame)
+
+        # should be inexepnsive so fine to do on each call
+        self._clean_frame_buffers(frame)
+
     def _update_telemetry(self, packet: CarTelemetryPacket) -> None:
         for i, telem in enumerate(packet.cars):
             car = self.cars[i]
 
             car.telemetry = telem
 
-            self._record_telemetry_sample(car=car, telemetry=telem, session_time=packet.header.session_time)
+        frame = packet.header.overall_frame_identifier
+
+        self._telemetry_buffer[frame] = packet
+
+        self._try_frame_match(frame)
+
+        # should be inexepnsive so fine to do on each call
+        self._clean_frame_buffers(frame)
 
     def _update_status(self, packet: CarStatusPacket) -> None:
         for i, status in enumerate(packet.cars):
@@ -236,23 +262,72 @@ class ApplicationState:
 
             self.lap_positions[lap_idx] = pos
 
+
+    def _try_frame_match(self, frame: int) -> None:
+        """
+        Tries to align a CarTelemetryPacket and a LapData packet on the specified frame.
+
+        The frame specified should refer to the packet header's overall_frame_identifier field.
+
+        If aligned packets exist, the sample is logged and they are removed from the buffer.
+        """
+        if frame not in self._telemetry_buffer or frame not in self._lap_data_buffer:
+            return None
+
+        # frame match, record the frame
+        telem_packet = self._telemetry_buffer[frame]
+        lap_packet = self._lap_data_buffer[frame]
+
+        for i in range(NUM_CARS):
+            car = self.cars[i]
+            telem = telem_packet.cars[i]
+            lap = lap_packet.cars[i]
+            time = telem_packet.header.session_time
+
+            self._record_telemetry_sample(car, lap, telem, time)
+
+        del self._telemetry_buffer[frame]
+        del self._lap_data_buffer[frame]
+
+    def _clean_frame_buffers(self, current_frame: int) -> None:
+        """
+        Throws away packets that unlikely to be aligned due to packet loss.
+
+        Packets that are _MAX_FRAME_AGE (10) frames older or more than the current frame are discarded.
+        """
+
+        thresh = current_frame - self._MAX_FRAME_AGE
+
+        # looping over keys is probably fine as buffer size should be max 10
+        # in practice it'll probably be even smaller due to alignments
+
+        for frame in list(self._lap_data_buffer):
+            if frame <= thresh:
+                del self._lap_data_buffer[frame]
+
+        for frame in list(self._telemetry_buffer):
+            if frame <= thresh:
+                del self._telemetry_buffer[frame]
+        
+
     # TODO: flashback will need to be handled somehow. figure that out later
-    def _record_telemetry_sample(self, car:CarState, telemetry: CarTelemetryData, session_time: float) -> None:
-        """add a telemetry sample to the current buffer"""
+    def _record_telemetry_sample(self, car:CarState, lap: LapData, telemetry: CarTelemetryData, session_time: float) -> None:
+        """Add a telemetry sample to the current buffer.
+        
+        The passed LapData and CarTelemetryData should be aligned (same frame number)
+        """
 
-        if car.lap is None:
-            return
-
+        # lap buffer hasn't been made yet
         if car.current_lap_telemetry is None:
             return
 
         # guard to ensure we don't write into wrong lap
-        if car.current_lap_telemetry.lap_number != car.lap.current_lap_num:
+        if car.current_lap_telemetry.lap_number != lap.current_lap_num:
             return
 
         car.current_lap_telemetry.append(
             session_time=session_time,
-            lap_distance=car.lap.lap_distance,
+            lap_distance=lap.lap_distance,
             speed=telemetry.speed,
             throttle=telemetry.throttle,
             brake=telemetry.brake,
@@ -310,4 +385,4 @@ class ApplicationState:
 
         completed = buffer.finish()
 
-        car.completed_laps_history[buffer.lap_number] = completed
+        car.completed_lap_telemetry[buffer.lap_number] = completed
