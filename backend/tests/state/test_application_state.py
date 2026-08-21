@@ -1,5 +1,6 @@
 import struct
 
+import numpy as np
 import pytest
 from dataclasses import replace
 
@@ -760,7 +761,6 @@ def packet_add_session_time(packet, session_time: float):
     return replace(packet, header=replace(packet.header, session_time=session_time))
 
 def test_same_lap_flashback():
-
     state = ApplicationState()
 
     lap_packet_1 = make_state_lap_packet(100, 3, 1000.0)
@@ -778,6 +778,7 @@ def test_same_lap_flashback():
         make_state_telemetry_packet(102, 240), 87.0
     )
 
+    # this order is fine as same lap and no risk of htting frame limit for del
     state.update(lap_packet_1)
     state.update(lap_packet_2)
     state.update(lap_packet_3)
@@ -827,3 +828,398 @@ def test_same_lap_flashback():
     assert car.current_lap_telemetry.session_time == pytest.approx([85.0, 86.0, 86.6])
     assert car.current_lap_telemetry.lap_distance == pytest.approx([1000.0, 1200.0, 1250.0])
     assert car.current_lap_telemetry.speed == [200, 220, 225]
+
+
+def test_lap_telemetry_to_buffer():
+    buffer = LapTelemetryBuffer(7)
+
+    buffer.session_time = [100.0, 100.1, 100.2]
+    buffer.lap_distance = [1200.0, 1225.0, 1250.0]
+
+    buffer.speed = [245, 252, 258]
+    buffer.throttle = [0.7, 0.9, 1.0]
+    buffer.brake = [0.2, 0.0, 0.0]
+    buffer.steer = [-0.15, -0.05, 0.0]
+
+    buffer.gear = [5, 6, 6]
+    buffer.engine_rpm = [10500, 11200, 11800]
+
+    buffer.drs = [False, False, True]
+
+    lap_telem = buffer.finish()
+
+    # ensure that setup is corect
+
+    # sanity check that all the lap_telem attrs are np arays and not lists
+    assert isinstance(lap_telem.session_time, np.ndarray)
+    assert isinstance(lap_telem.lap_distance, np.ndarray)
+    assert isinstance(lap_telem.speed, np.ndarray)
+    assert isinstance(lap_telem.throttle, np.ndarray)
+    assert isinstance(lap_telem.brake, np.ndarray)
+    assert isinstance(lap_telem.steer, np.ndarray)
+    assert isinstance(lap_telem.gear, np.ndarray)
+    assert isinstance(lap_telem.engine_rpm, np.ndarray)
+    assert isinstance(lap_telem.drs, np.ndarray)
+
+    # now ensure vals are correct
+    np.testing.assert_allclose(lap_telem.session_time, [100.0, 100.1, 100.2])
+    np.testing.assert_allclose(lap_telem.lap_distance, [1200.0, 1225.0, 1250.0])
+
+    np.testing.assert_array_equal(lap_telem.speed, [245, 252, 258])
+    np.testing.assert_allclose(lap_telem.throttle, [0.7, 0.9, 1.0])
+    np.testing.assert_allclose(lap_telem.brake, [0.2, 0.0, 0.0])
+    np.testing.assert_allclose(lap_telem.steer, [-0.15, -0.05, 0.0])
+
+    np.testing.assert_array_equal(lap_telem.gear, [5, 6, 6])
+    np.testing.assert_array_equal(lap_telem.engine_rpm, [10500, 11200, 11800])
+    np.testing.assert_array_equal(lap_telem.drs, [False, False, True])
+
+    # this is the actual test
+
+    new_buffer = lap_telem.to_buffer()
+
+    assert new_buffer.lap_number == 7
+
+    # now they should be back to original lists
+    assert isinstance(new_buffer.session_time, list)
+    assert isinstance(new_buffer.lap_distance, list)
+    assert isinstance(new_buffer.speed, list)
+    assert isinstance(new_buffer.throttle, list)
+    assert isinstance(new_buffer.brake, list)
+    assert isinstance(new_buffer.steer, list)
+    assert isinstance(new_buffer.gear, list)
+    assert isinstance(new_buffer.engine_rpm, list)
+    assert isinstance(new_buffer.drs, list)
+
+    assert new_buffer.session_time == pytest.approx([100.0, 100.1, 100.2])
+    assert new_buffer.lap_distance == pytest.approx([1200.0, 1225.0, 1250.0])
+
+    assert new_buffer.speed == [245, 252, 258]
+    assert new_buffer.throttle == pytest.approx([0.7, 0.9, 1.0])
+    assert new_buffer.brake == pytest.approx([0.2, 0.0, 0.0])
+    assert new_buffer.steer == pytest.approx([-0.15, -0.05, 0.0])
+
+    assert new_buffer.gear == [5, 6, 6]
+    assert new_buffer.engine_rpm == [10500, 11200, 11800]
+
+    assert new_buffer.drs == [False, False, True]
+
+
+def test_different_lap_flashback():
+    state = ApplicationState()
+
+    lap_packet_1 = make_state_lap_packet(100, 3, 1000.0)
+    telemetry_packet_1 = packet_add_session_time(
+        make_state_telemetry_packet(100, 200), 85.0
+    )
+
+    lap_packet_2 = make_state_lap_packet(101, 3, 1200.0)
+    telemetry_packet_2 = packet_add_session_time(
+        make_state_telemetry_packet(101, 220), 86.0
+    )
+
+    lap_packet_3 = make_state_lap_packet(102, 4, 100.0)
+    telemetry_packet_3 = packet_add_session_time(
+        make_state_telemetry_packet(102, 240), 87.0
+    )
+
+    state.update(lap_packet_1)
+    state.update(telemetry_packet_1)
+
+    state.update(lap_packet_2)
+    state.update(telemetry_packet_2)
+
+    state.update(lap_packet_3)
+    state.update(telemetry_packet_3)
+
+    car = state.cars[0]
+
+    assert car.current_lap_telemetry is not None
+    assert car.current_lap_telemetry.lap_number == 4
+    assert car.current_lap_telemetry.session_time == pytest.approx([87.0])
+
+    assert car.completed_lap_telemetry is not None
+    assert 3 in car.completed_lap_telemetry
+    np.testing.assert_allclose(car.completed_lap_telemetry[3].session_time, [85.0, 86.0])
+
+    # flashback between second and third entry, crossing lap 3/4
+
+    flashback_packet = EventPacket.from_bytes(make_event_packet(
+        "FLBK", struct.pack("<If", 102, 85.5)
+    ))
+
+    state.update(flashback_packet)
+
+    assert state._pending_flashback_time == pytest.approx(85.5)
+    assert state._pending_flashback_frame == 102
+
+    # now new lap data inbound, lap 3
+
+    lap_packet_4 = make_state_lap_packet(103, 3, 1200.0)
+    state.update(lap_packet_4)
+
+    assert 3 not in car.completed_lap_telemetry
+
+    assert car.current_lap_telemetry is not None
+    assert car.current_lap_telemetry.lap_number == 3
+    assert car.current_lap_telemetry.session_time == pytest.approx([85.0])
+    assert car.current_lap_telemetry.lap_distance == pytest.approx([1000.0])
+    assert car.current_lap_telemetry.speed == [200]
+
+    assert state._pending_flashback_time is None
+    assert state._pending_flashback_frame is None
+
+    telemetry_packet_4 = packet_add_session_time(
+        make_state_telemetry_packet(103, 238), 85.6
+    )
+
+    state.update(telemetry_packet_4)
+
+    assert car.current_lap_telemetry.session_time == pytest.approx([85.0, 85.6])
+    assert car.current_lap_telemetry.lap_distance == pytest.approx([1000.0, 1200.0])
+    assert car.current_lap_telemetry.speed == [200, 238]
+
+def test_flashback_to_lap_zero():
+    """
+    Tests that, upon receiving a flashback to lap 0, no new telemetry buffer is created
+    """
+    state = ApplicationState()
+
+    lap_packet_1 = make_state_lap_packet(4, 1, 10.0)
+    telemetry_packet_1 = packet_add_session_time(
+        make_state_telemetry_packet(4, 24), 15.0
+    )
+
+    state.update(lap_packet_1)
+
+    state.update(telemetry_packet_1)
+
+
+    car = state.cars[0]
+
+    assert car.current_lap_telemetry is not None
+    assert car.current_lap_telemetry.session_time == pytest.approx([15.0])
+
+    # flashback to lap 0
+
+    flashback_packet = EventPacket.from_bytes(make_event_packet(
+        "FLBK", struct.pack("<If", 0, 0.0)
+    ))
+
+    state.update(flashback_packet)
+
+    assert state._pending_flashback_time == pytest.approx(0.0)
+    assert state._pending_flashback_frame == 0
+
+    # now new lap data but for lap 0
+
+    lap_packet_2 = make_state_lap_packet(5, 0, 0.0)
+
+    state.update(lap_packet_2)
+
+    assert car.current_lap_telemetry is  None
+    assert state._pending_flashback_frame is None
+    assert state._pending_flashback_time is None
+
+
+def test_flashback_across_multiple_laps():
+    """
+    This tests that a flashback spanning multiple laps deletes completed laps correctly and restarts the correct buffer
+    """
+    state = ApplicationState()
+    
+    lap_packet_1 = make_state_lap_packet(100, 3, 1000.0)
+    telemetry_packet_1 = packet_add_session_time(
+        make_state_telemetry_packet(100, 200), 85.0
+    )
+
+    lap_packet_2 = make_state_lap_packet(101, 4, 1200.0)
+    telemetry_packet_2 = packet_add_session_time(
+        make_state_telemetry_packet(101, 220), 86.0
+    )
+
+    lap_packet_3 = make_state_lap_packet(102, 5, 100.0)
+    telemetry_packet_3 = packet_add_session_time(
+        make_state_telemetry_packet(102, 240), 87.0
+    )
+
+    state.update(lap_packet_1)
+    state.update(telemetry_packet_1)
+
+    state.update(lap_packet_2)
+    state.update(telemetry_packet_2)
+
+    state.update(lap_packet_3)
+    state.update(telemetry_packet_3)
+
+    car = state.cars[0]
+
+    assert car.current_lap_telemetry is not None
+    assert car.current_lap_telemetry.lap_number == 5
+    assert car.current_lap_telemetry.session_time == pytest.approx([87.0])
+
+    assert car.completed_lap_telemetry is not None
+    assert 3 in car.completed_lap_telemetry
+    assert 4 in car.completed_lap_telemetry
+    np.testing.assert_allclose(car.completed_lap_telemetry[3].session_time, [85.0])
+    np.testing.assert_allclose(car.completed_lap_telemetry[4].session_time, [86.0])
+
+    # flashback between second and third entry, crossing lap 3/4/5
+
+    flashback_packet = EventPacket.from_bytes(make_event_packet(
+        "FLBK", struct.pack("<If", 102, 85.5)
+    ))
+
+    state.update(flashback_packet)
+
+    assert state._pending_flashback_time == pytest.approx(85.5)
+    assert state._pending_flashback_frame == 102
+
+    # now new lap data inbound, lap 3
+    # laps 3-5 no longer in completed, lap 3 reopened
+
+    lap_packet_4 = make_state_lap_packet(103, 3, 1200.0)
+    state.update(lap_packet_4)
+
+    assert 3 not in car.completed_lap_telemetry
+    assert 4 not in car.completed_lap_telemetry
+    assert 5 not in car.completed_lap_telemetry
+
+    assert car.current_lap_telemetry is not None
+    assert car.current_lap_telemetry.lap_number == 3
+    assert car.current_lap_telemetry.session_time == pytest.approx([85.0])
+    assert car.current_lap_telemetry.lap_distance == pytest.approx([1000.0])
+    assert car.current_lap_telemetry.speed == [200]
+
+    assert state._pending_flashback_time is None
+    assert state._pending_flashback_frame is None
+
+    telemetry_packet_4 = packet_add_session_time(
+        make_state_telemetry_packet(103, 238), 85.6
+    )
+
+    state.update(telemetry_packet_4)
+
+    assert car.current_lap_telemetry.session_time == pytest.approx([85.0, 85.6])
+    assert car.current_lap_telemetry.lap_distance == pytest.approx([1000.0, 1200.0])
+    assert car.current_lap_telemetry.speed == [200, 238]
+
+
+def test_target_not_recorded():
+    """
+    This tests that flashbacks to laps that dont have a recorded sample just get a new buffer.
+    """
+
+    state = ApplicationState()
+
+    lap_packet_1 = make_state_lap_packet(100, 3, 1000.0)
+    telemetry_packet_1 = packet_add_session_time(
+        make_state_telemetry_packet(100, 200), 85.0
+    )
+
+    lap_packet_2 = make_state_lap_packet(101, 3, 1200.0)
+    telemetry_packet_2 = packet_add_session_time(
+        make_state_telemetry_packet(101, 220), 86.0
+    )
+
+    lap_packet_3 = make_state_lap_packet(102, 3, 1400.0)
+    telemetry_packet_3 = packet_add_session_time(
+        make_state_telemetry_packet(102, 240), 87.0
+    )
+
+    # this order is fine as same lap and no risk of htting frame limit for del
+    state.update(lap_packet_1)
+    state.update(lap_packet_2)
+    state.update(lap_packet_3)
+
+    state.update(telemetry_packet_1)
+    state.update(telemetry_packet_2)
+    state.update(telemetry_packet_3)
+
+    car = state.cars[0]
+
+    assert car.current_lap_telemetry is not None
+    assert car.current_lap_telemetry.session_time == pytest.approx([85.0, 86.0, 87.0])
+
+    # flashback between second and third entry
+
+    flashback_packet = EventPacket.from_bytes(make_event_packet(
+        "FLBK", struct.pack("<If", 900, 86.5)
+    ))
+
+    state.update(flashback_packet)
+
+    assert state._pending_flashback_time == pytest.approx(86.5)
+    assert state._pending_flashback_frame == 900
+
+    # now new lap data inbound, this time to lap 2, unrecorded
+
+    lap_packet_4 = make_state_lap_packet(103, 2, 1250.0)
+
+    state.update(lap_packet_4)
+
+    assert car.current_lap_telemetry is not None
+    assert car.current_lap_telemetry.lap_number == 2
+    assert 3 not in car.completed_lap_telemetry
+
+    # flashback done
+    assert state._pending_flashback_frame is None
+    assert state._pending_flashback_time is None
+
+    # now match tleemetry to check that recording continues
+    telemetry_packet_4 = packet_add_session_time(make_state_telemetry_packet(103, 225), 86.6)
+
+    state.update(telemetry_packet_4)
+
+    assert car.current_lap_telemetry.session_time == pytest.approx([86.6])
+    assert car.current_lap_telemetry.lap_distance == pytest.approx([1250.0])
+    assert car.current_lap_telemetry.speed == [225]  
+
+
+def test_flashback_in_event_log():
+    """
+    Tests that flashbacks are correctly added to event log, including after the flashback is handled
+    """
+    state = ApplicationState()
+
+    lap_packet_1 = make_state_lap_packet(100, 3, 1000.0)
+    telemetry_packet_1 = packet_add_session_time(
+        make_state_telemetry_packet(100, 200), 85.0
+    )
+
+    lap_packet_2 = make_state_lap_packet(101, 3, 1200.0)
+    telemetry_packet_2 = packet_add_session_time(
+        make_state_telemetry_packet(101, 220), 86.0
+    )
+
+    # this order is fine as same lap and no risk of htting frame limit for del
+    state.update(lap_packet_1)
+    state.update(lap_packet_2)
+
+    state.update(telemetry_packet_1)
+    state.update(telemetry_packet_2)
+
+    # skipping buffer assertions as these are validating in previous tests
+
+    # flashback between second and third entry
+
+    flashback_packet = EventPacket.from_bytes(make_event_packet(
+        "FLBK", struct.pack("<If", 900, 86.5)
+    ))
+
+    state.update(flashback_packet)
+
+    assert state._pending_flashback_time == pytest.approx(86.5)
+    assert state._pending_flashback_frame == 900
+    assert flashback_packet in state.events
+
+    # now do flashback
+
+    lap_packet_4 = make_state_lap_packet(103, 3, 1250.0)
+
+    state.update(lap_packet_4)
+
+    # flashback done, esure packet still in event log
+    assert state._pending_flashback_frame is None
+    assert state._pending_flashback_time is None
+    assert flashback_packet in state.events

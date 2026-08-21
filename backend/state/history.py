@@ -153,3 +153,24 @@ class LapTelemetry:
         """Return the number of telemetry samples stored for the lap."""
 
         return len(self.lap_distance)
+
+    # converting back to buffer may be needed in case of flashback crossing laps
+    def to_buffer(self) -> LapTelemetryBuffer:
+        """
+        Converts the current LapTelemetry to a LapTelemetryBuffer.
+
+        This should mainly be used for handling flashbacks that cross a lap.
+        """
+        buffer = LapTelemetryBuffer(self.lap_number)
+
+        buffer.session_time = self.session_time.tolist()
+        buffer.lap_distance = self.lap_distance.tolist()
+        buffer.speed = self.speed.tolist()
+        buffer.throttle = self.throttle.tolist()
+        buffer.brake = self.brake.tolist()
+        buffer.steer = self.steer.tolist()
+        buffer.gear = self.gear.tolist()
+        buffer.engine_rpm = self.engine_rpm.tolist()
+        buffer.drs = self.drs.tolist()
+
+        return buffer

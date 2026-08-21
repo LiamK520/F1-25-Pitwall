@@ -430,6 +430,34 @@ class ApplicationState:
             # we dont need to do anything
             return
 
+        # not sure if this can happen but dont want a buffer for pre-race
+        if target_lap_number == 0:
+            car.current_lap_telemetry = None
+            return
+
         # same lap so trim current buffer
         if buffer.lap_number == target_lap_number:
             buffer.trim_after_session_time(target_session_time)
+            return
+
+        # earlier lap flashback
+        if buffer.lap_number > target_lap_number:
+            # get rid of everything after the lap we are on
+            # i dont think flashbacks can cross more than one lap, but just to be safe (e.g. mods)
+            for lap_number in list(car.completed_lap_telemetry):
+                if lap_number > target_lap_number:
+                    del car.completed_lap_telemetry[lap_number]
+
+            # target lap that was previously finished
+            target_lap = car.completed_lap_telemetry.pop(target_lap_number, None)
+
+            if target_lap is None:
+                # just make a fresh buffer as we have not got a record for this lap
+                car.current_lap_telemetry = LapTelemetryBuffer(target_lap_number)
+                return
+
+            # otherwise we need to restore the buffer and trim
+            new_buffer = target_lap.to_buffer()
+            new_buffer.trim_after_session_time(target_session_time)
+
+            car.current_lap_telemetry = new_buffer
