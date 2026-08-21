@@ -12,7 +12,7 @@ from udp.car_telemetry import CarTelemetryData,CarTelemetryPacket
 from udp.car_status import CarStatusData,CarStatusPacket
 from udp.car_damage import CarDamageData,CarDamagePacket
 from udp.session import SessionPacket
-from udp.event import EventPacket
+from udp.event import EventPacket, FlashbackEvent
 from udp.session_history import SessionHistoryPacket
 from udp.tyre_sets import TyreSetsPacket
 from udp.car_setup import CarSetupData, CarSetupPacket
@@ -87,6 +87,10 @@ class ApplicationState:
     _telemetry_buffer: dict[int, CarTelemetryPacket] = field(default_factory=dict)
     _lap_data_buffer: dict[int, LapDataPacket] = field(default_factory=dict)
 
+    # flashback stuff
+    _pending_flashback_time: float | None = None
+    _pending_flashback_frame: int | None = None
+
     # consts
     _MAX_FRAME_AGE = 10
 
@@ -119,6 +123,9 @@ class ApplicationState:
         self._telemetry_buffer.clear()
         self._lap_data_buffer.clear()
 
+        self._pending_flashback_frame = None
+        self._pending_flashback_time = None
+
     def update(self, packet) -> None:
         """
         Updates the state with the relevant information in the supplised packet
@@ -148,6 +155,9 @@ class ApplicationState:
 
         elif isinstance(packet, EventPacket):
             self.events.append(packet)
+
+            if packet.event_code == "FLBK":
+                self._handle_flashback_event(packet)
 
         elif isinstance(packet, CarSetupPacket):
             self._update_setups(packet)
@@ -197,12 +207,23 @@ class ApplicationState:
             self.cars[i].participant = part
 
     def _update_lap_data(self, packet: LapDataPacket) -> None:
+        pending_flashback = self._pending_flashback_time is not None
+
         for i, lap in enumerate(packet.cars):
             car = self.cars[i]
+
+            # apply flashbacks only in lap data as we need the new lap number
+            if pending_flashback:
+                self._apply_flashback_to_car(car, target_lap_number=lap.current_lap_num, target_session_time=self._pending_flashback_time)
 
             self._update_lap_telemetry(car, lap)
 
             car.lap = lap
+
+        if pending_flashback:
+            # unset the flashback fields
+            self._pending_flashback_time = None
+            self._pending_flashback_frame = None
 
         frame = packet.header.overall_frame_identifier
 
@@ -386,3 +407,29 @@ class ApplicationState:
         completed = buffer.finish()
 
         car.completed_lap_telemetry[buffer.lap_number] = completed
+
+
+    def _handle_flashback_event(self, packet: EventPacket) -> None:
+        flashback = packet.details
+
+        # if this method is called the vent should always be Flashback
+        assert isinstance(flashback, FlashbackEvent)
+
+        self._pending_flashback_time = flashback.flashback_session_time
+        self._pending_flashback_frame = flashback.flashback_frame_identifier
+
+        # clear these as the old frames are uselss now
+        self._lap_data_buffer.clear()
+        self._telemetry_buffer.clear()
+
+
+    def _apply_flashback_to_car(self, car: CarState, target_lap_number: int, target_session_time: float) -> None:
+        buffer = car.current_lap_telemetry
+
+        if buffer is None:
+            # we dont need to do anything
+            return
+
+        # same lap so trim current buffer
+        if buffer.lap_number == target_lap_number:
+            buffer.trim_after_session_time(target_session_time)

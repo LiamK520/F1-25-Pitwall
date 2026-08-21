@@ -107,6 +107,25 @@ class LapTelemetryBuffer:
             ),
         )
 
+    def trim_after_session_time(self, flashback_time: float) -> None:
+        """
+        Remove telemetry samples recorded after the specified time.
+
+        All telemetry samples remain algined.
+        """
+        keep = [i for i, t in enumerate(self.session_time) if t <= flashback_time]
+
+        # slightly inefficient but should be fine given frequency of flashbacks and relatively small data sizes
+        self.session_time = [self.session_time[i] for i in keep]
+        self.lap_distance = [self.lap_distance[i] for i in keep]
+        self.brake = [self.brake[i] for i in keep]
+        self.speed = [self.speed[i] for i in keep]
+        self.throttle = [self.throttle[i] for i in keep]
+        self.steer = [self.steer[i] for i in keep]
+        self.gear = [self.gear[i] for i in keep]
+        self.engine_rpm = [self.engine_rpm[i] for i in keep]
+        self.drs = [self.drs[i] for i in keep]
+
 # fixed dataclass that uses numpy arrays to store data more compactly and allow for easier data analysis in future
 @dataclass(frozen=True)
 class LapTelemetry:

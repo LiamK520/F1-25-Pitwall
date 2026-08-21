@@ -1,7 +1,10 @@
+import struct
+
 import pytest
 from dataclasses import replace
 
 from state.application_state import ApplicationState, CarState
+from state.history import LapTelemetryBuffer
 
 from tests.helpers import make_header
 from tests.udp.test_car_damage import make_car_damage
@@ -722,3 +725,105 @@ def test_lap_change_completes_buffer():
     assert len(car.current_lap_telemetry.lap_distance) == 1
     assert car.current_lap_telemetry.lap_distance[0] == pytest.approx(5.0)
     assert car.current_lap_telemetry.speed[0] == 255
+
+
+# test for lap telem flashback
+def test_lap_telemetry_buffer_trim():
+    buffer = LapTelemetryBuffer(3)
+
+    # buffer includes out of order data
+    buffer.session_time = [3.0, 6.0, 5.0, 7.0]
+    buffer.lap_distance = [100.0, 250.0, 200.0, 300.0]
+    buffer.speed = [180, 235, 220, 250]
+    buffer.throttle = [0.5, 0.9, 0.8, 1.0]
+    buffer.brake = [0.0, 0.1, 0.2, 0.0]
+    buffer.steer = [0.1, -0.1, -0.2, 0.0]
+    buffer.gear = [4, 5, 5, 6]
+    buffer.engine_rpm = [9000, 11000, 10500, 11800]
+    buffer.drs = [False, True, False, True]
+
+    buffer.trim_after_session_time(5.0)
+
+    # this should have removed index 1 and 3 from all above lists
+    assert buffer.session_time == [3.0, 5.0]
+    assert buffer.lap_distance == pytest.approx([100.0, 200.0])
+    assert buffer.speed == [180, 220]
+    assert buffer.throttle == pytest.approx([0.5, 0.8])
+    assert buffer.brake == pytest.approx([0.0, 0.2])
+    assert buffer.steer == pytest.approx([0.1, -0.2])
+    assert buffer.gear == [4, 5]
+    assert buffer.engine_rpm == [9000, 10500]
+    assert buffer.drs == [False, False]
+
+# helper
+def packet_add_session_time(packet, session_time: float):
+    return replace(packet, header=replace(packet.header, session_time=session_time))
+
+def test_same_lap_flashback():
+
+    state = ApplicationState()
+
+    lap_packet_1 = make_state_lap_packet(100, 3, 1000.0)
+    telemetry_packet_1 = packet_add_session_time(
+        make_state_telemetry_packet(100, 200), 85.0
+    )
+
+    lap_packet_2 = make_state_lap_packet(101, 3, 1200.0)
+    telemetry_packet_2 = packet_add_session_time(
+        make_state_telemetry_packet(101, 220), 86.0
+    )
+
+    lap_packet_3 = make_state_lap_packet(102, 3, 1400.0)
+    telemetry_packet_3 = packet_add_session_time(
+        make_state_telemetry_packet(102, 240), 87.0
+    )
+
+    state.update(lap_packet_1)
+    state.update(lap_packet_2)
+    state.update(lap_packet_3)
+
+    state.update(telemetry_packet_1)
+    state.update(telemetry_packet_2)
+    state.update(telemetry_packet_3)
+
+    car = state.cars[0]
+
+    assert car.current_lap_telemetry is not None
+    assert car.current_lap_telemetry.session_time == pytest.approx([85.0, 86.0, 87.0])
+
+    # flashback between second and third entry
+
+    flashback_packet = EventPacket.from_bytes(make_event_packet(
+        "FLBK", struct.pack("<If", 900, 86.5)
+    ))
+
+    state.update(flashback_packet)
+
+    assert state._pending_flashback_time == pytest.approx(86.5)
+    assert state._pending_flashback_frame == 900
+
+    # now new lap data inbound, same lap
+
+    lap_packet_4 = make_state_lap_packet(103, 3, 1250.0)
+
+    state.update(lap_packet_4)
+
+    assert car.current_lap_telemetry is not None
+    assert car.current_lap_telemetry.lap_number == 3
+
+    assert car.current_lap_telemetry.session_time == pytest.approx([85.0, 86.0])
+    assert car.current_lap_telemetry.lap_distance == pytest.approx([1000.0, 1200.0])
+    assert car.current_lap_telemetry.speed == [200, 220]
+
+    # flashback done
+    assert state._pending_flashback_frame is None
+    assert state._pending_flashback_time is None
+
+    # now match tleemetry to check that recording continues
+    telemetry_packet_4 = packet_add_session_time(make_state_telemetry_packet(103, 225), 86.6)
+
+    state.update(telemetry_packet_4)
+
+    assert car.current_lap_telemetry.session_time == pytest.approx([85.0, 86.0, 86.6])
+    assert car.current_lap_telemetry.lap_distance == pytest.approx([1000.0, 1200.0, 1250.0])
+    assert car.current_lap_telemetry.speed == [200, 220, 225]
