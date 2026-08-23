@@ -1,10 +1,14 @@
 from contextlib import asynccontextmanager
 import threading
 
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 from udp.receiver import run_receiver
 from state.application_state import ApplicationState
+from api.schemas import StateResponse
+from api.serialiser import serialise_live_frame, serialise_state
+
+import asyncio
 
 state = ApplicationState()
 
@@ -28,34 +32,33 @@ app = FastAPI(title="F1 25 Pit Wall", lifespan=lifespan)
 def health():
     return {"status": "ok"}
 
-@app.get("/state")
+@app.get("/state", response_model=StateResponse)
 def get_state():
-    car = state.player_car
+    return serialise_state(state)
 
-    return {
-        "session_uid": state.session_uid,
-        "num_active_cars": state.num_active_cars,
-        "player_car_index": state.player_car_index,
 
-        "player": {
-            "lap": car.lap.current_lap_num
-                if car is not None and car.lap is not None
-                else None,
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
 
-            "lap_distance": car.lap.lap_distance
-                if car is not None and car.lap is not None
-                else None,
+    last_sent: tuple[int, int] | None = None
 
-            "speed": car.telemetry.speed
-                if car is not None and car.telemetry is not None
-                else None,
+    try:
+        while True:
+            live_frame = state.latest_live_frame
 
-            "gear": car.telemetry.gear
-                if car is not None and car.telemetry is not None
-                else None,
+            if live_frame is not None:
+                # use both session uid and frame in key just in case session changes or something
+                key = (state.session_uid, live_frame.overall_frame_identifier)
 
-            "rpm": car.telemetry.engine_rpm
-                if car is not None and car.telemetry is not None
-                else None,
-        }
-    }
+            if key != last_sent:
+                response = serialise_live_frame(live_frame)
+
+                await websocket.send_json(response.model_dump())
+
+                last_sent = key
+
+            # send at approx 20hz
+            await asyncio.sleep(0.05)
+    except WebSocketDisconnect:
+        pass

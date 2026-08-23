@@ -20,6 +20,7 @@ from udp.lap_positions import LapPositionsPacket
 from udp.final_classification import FinalClassificationPacket
 
 from state.history import LapTelemetry, LapTelemetryBuffer
+from state.live import MatchedLiveFrame
 
 
 @dataclass
@@ -91,6 +92,9 @@ class ApplicationState:
     _pending_flashback_time: float | None = None
     _pending_flashback_frame: int | None = None
 
+    # latest matched lapdat and cartelem
+    latest_live_frame: MatchedLiveFrame | None = None
+
     # consts
     _MAX_FRAME_AGE = 10
 
@@ -125,6 +129,8 @@ class ApplicationState:
 
         self._pending_flashback_frame = None
         self._pending_flashback_time = None
+
+        self.latest_live_frame = None
 
     def update(self, packet) -> None:
         """
@@ -299,6 +305,8 @@ class ApplicationState:
         telem_packet = self._telemetry_buffer[frame]
         lap_packet = self._lap_data_buffer[frame]
 
+        self.latest_live_frame = MatchedLiveFrame(lap_packet, telem_packet)
+
         for i in range(NUM_CARS):
             car = self.cars[i]
             telem = telem_packet.cars[i]
@@ -421,6 +429,7 @@ class ApplicationState:
         # clear these as the old frames are uselss now
         self._lap_data_buffer.clear()
         self._telemetry_buffer.clear()
+        self.latest_live_frame = None
 
 
     def _apply_flashback_to_car(self, car: CarState, target_lap_number: int, target_session_time: float) -> None:

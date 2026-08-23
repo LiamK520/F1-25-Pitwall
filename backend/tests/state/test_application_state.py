@@ -428,7 +428,7 @@ def test_reset_clears_application_state():
     assert state.lap_positions == {}
     assert state.final_classification is None
     assert state.next_front_wing_value is None
-
+    assert state.latest_live_frame is None
 #
 # frame alignment tests
 #
@@ -1070,7 +1070,14 @@ def test_flashback_across_multiple_laps():
         "FLBK", struct.pack("<If", 102, 85.5)
     ))
 
+    # should be a amtch
+    assert state.latest_live_frame is not None
+    
     state.update(flashback_packet)
+
+
+    # match discard after flashback
+    assert state.latest_live_frame is None
 
     assert state._pending_flashback_time == pytest.approx(85.5)
     assert state._pending_flashback_frame == 102
@@ -1223,3 +1230,75 @@ def test_flashback_in_event_log():
     assert state._pending_flashback_frame is None
     assert state._pending_flashback_time is None
     assert flashback_packet in state.events
+
+
+def test_latest_live_frame_starts_none():
+    state = ApplicationState()
+
+    assert state.latest_live_frame is None
+
+
+def test_matched_packets_create_latest_live_frame():
+    state = ApplicationState()
+
+    lap_packet = make_state_lap_packet(100, 3, 1250.0)
+
+    telemetry_packet = make_state_telemetry_packet(100, 250)
+
+    state.update(lap_packet)
+
+    # no match
+    assert state.latest_live_frame is None
+
+    state.update(telemetry_packet)
+
+    # yes match
+    assert state.latest_live_frame is not None
+
+    assert state.latest_live_frame.overall_frame_identifier == 100
+    assert state.latest_live_frame.lap_data is lap_packet
+    assert state.latest_live_frame.telemetry is telemetry_packet
+    assert state.latest_live_frame.session_time == pytest.approx(lap_packet.header.session_time)
+
+
+def test_unmatched_packets_do_not_create_latest_live_frame():
+    state = ApplicationState()
+
+    lap_packet = make_state_lap_packet(100, 3, 1250.0)
+
+    telemetry_packet = make_state_telemetry_packet(101, 250)
+
+    state.update(lap_packet)
+    state.update(telemetry_packet)
+
+    assert state.latest_live_frame is None
+
+
+def test_new_match_replaces_latest_live_frame():
+    state = ApplicationState()
+
+    lap_packet_1 = make_state_lap_packet(100, 3, 1200.0)
+
+    telemetry_packet_1 = make_state_telemetry_packet(100, 240)
+
+    state.update(lap_packet_1)
+    state.update(telemetry_packet_1)
+
+    first_frame = state.latest_live_frame
+
+    assert first_frame is not None
+    assert first_frame.overall_frame_identifier == 100
+
+    lap_packet_2 = make_state_lap_packet(101, 3, 1250.0)
+
+    telemetry_packet_2 = make_state_telemetry_packet(101, 250)
+
+    state.update(lap_packet_2)
+    state.update(telemetry_packet_2)
+
+    assert state.latest_live_frame is not None
+    assert state.latest_live_frame.overall_frame_identifier == 101
+
+    assert state.latest_live_frame is not first_frame
+    assert state.latest_live_frame.lap_data is lap_packet_2
+    assert state.latest_live_frame.telemetry is telemetry_packet_2

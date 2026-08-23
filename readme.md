@@ -5,13 +5,13 @@ Real time pit wall dashboard using UDP telemetry from EA SPORTS F1 25.
 
 ## Ongoing
 
-- API/Websocket layer        
+- API/Websocket layer
+- Basic react frontend        
 
 ## Todo
 
 - Backend analysis
     - Features TBD
-- Basic react frontend
 - Documentation (minor documentation exists for some functions but overhaul planned)
 
 ## Backlog
