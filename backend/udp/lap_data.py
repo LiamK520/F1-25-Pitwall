@@ -121,7 +121,7 @@ class LapData:
     pit_stop_timer_ms: int
     pit_stop_should_serve_pen: int
 
-    speed_trap_fastest_speed: int
+    speed_trap_fastest_speed: float
     speed_trap_fastest_lap: int
 
     @classmethod
@@ -161,7 +161,7 @@ class LapDataPacket:
 
         return cls(
             header=header,
-            cars=cars,
+            cars=tuple(cars),
             time_trial_pb_car_index=time_trial_pb_car_index,
             time_trial_rival_car_index=time_trial_rival_car_index
         )

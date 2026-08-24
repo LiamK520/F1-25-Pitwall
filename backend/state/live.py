@@ -13,5 +13,5 @@ class MatchedLiveFrame:
         return self.lap_data.header.overall_frame_identifier
 
     @property
-    def session_time(self) -> int:
+    def session_time(self) -> float:
         return self.lap_data.header.session_time

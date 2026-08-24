@@ -16,6 +16,8 @@ stop_event = threading.Event()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    stop_event.clear()
+    
     receive_thread = threading.Thread(target=run_receiver, args=(state, stop_event), daemon=True)
 
     receive_thread.start()
@@ -51,12 +53,12 @@ async def websocket_endpoint(websocket: WebSocket):
                 # use both session uid and frame in key just in case session changes or something
                 key = (state.session_uid, live_frame.overall_frame_identifier)
 
-            if key != last_sent:
-                response = serialise_live_frame(live_frame)
+                if key != last_sent:
+                    response = serialise_live_frame(live_frame)
 
-                await websocket.send_json(response.model_dump())
+                    await websocket.send_json(response.model_dump())
 
-                last_sent = key
+                    last_sent = key
 
             # send at approx 20hz
             await asyncio.sleep(0.05)

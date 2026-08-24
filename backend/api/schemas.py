@@ -107,7 +107,7 @@ class LiveCarResponse(BaseModel):
     rev_lights_percent: int
     rev_lights_bit_value: int
 
-    # wheels rr rl lr ll
+    # wheels rl rr fl fr
     brakes_temperature: tuple[int, int, int, int]
     tyres_surface_temperature: tuple[int, int, int, int]
     tyres_inner_temperature: tuple[int, int, int, int]
