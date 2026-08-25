@@ -6,6 +6,10 @@ import type {
 } from "./types/api"
 
 import TimingTower from "./components/TimingTower"
+import DriverTelemetry from "./components/DriverTelemetry"
+
+// ms
+const REFRESH_RATE = 500
 
 function App() {
   const [state, setState] = useState<StateResponse | null>(null)
@@ -78,7 +82,7 @@ function App() {
       if (latest !== null) {
         setTimingFrame(latest)
       }
-    }, 500)
+    }, REFRESH_RATE)
 
     return () => {
       window.clearInterval(timer)
@@ -118,7 +122,13 @@ function App() {
         />
       )}
 
-      <p>Selected car: {selectedCarIndex ?? "None"}</p>
+      {state && selectedCarIndex !== null && (
+        <DriverTelemetry
+          state={state}
+          carIndex={selectedCarIndex}
+          latestFrameRef={latestFrameRef}
+        />
+      )}
     </main>
   )
 }
