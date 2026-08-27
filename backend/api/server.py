@@ -6,7 +6,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from udp.receiver import run_receiver
 from state.application_state import ApplicationState
 from api.schemas import StateResponse
-from api.serialiser import serialise_live_frame, serialise_state
+from api.serialiser import serialise_live_frame, serialise_state, serialise_session_update
 
 import asyncio
 
@@ -43,7 +43,8 @@ def get_state():
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
 
-    last_sent: tuple[int, int] | None = None
+    last_live_sent: tuple[int, int] | None = None
+    last_session_sent: tuple[int, int, int, int, int] | None = None
 
     try:
         while True:
@@ -51,14 +52,32 @@ async def websocket_endpoint(websocket: WebSocket):
 
             if live_frame is not None:
                 # use both session uid and frame in key just in case session changes or something
-                key = (state.session_uid, live_frame.overall_frame_identifier)
+                live_key = (state.session_uid, live_frame.overall_frame_identifier)
 
-                if key != last_sent:
+                if live_key != last_live_sent:
                     response = serialise_live_frame(live_frame)
 
                     await websocket.send_json(response.model_dump())
 
-                    last_sent = key
+                    last_live_sent = live_key
+
+            session = state.session
+
+            if session is not None:
+                # if any of these change resend
+                session_key = (
+                    session.header.session_uid,
+                    session.weather,
+                    session.track_temperature,
+                    session.air_temperature,
+                    session.safety_car_status
+                )
+
+                if session_key != last_session_sent:
+                    response = serialise_session_update(session)
+                    await websocket.send_json(response.model_dump())
+
+                    last_session_sent = session_key
 
             # send at approx 20hz
             await asyncio.sleep(0.05)

@@ -43,6 +43,22 @@ export interface StateResponse {
 }
 
 
+export interface SessionUpdate {
+    type: "session_update"
+
+    session_uid: number
+
+    weather: number
+    weather_name: string
+
+    track_temperature: number
+    air_temperature: number
+
+    safety_car_status: number
+    safety_car_status_name: string
+}
+
+
 export interface LiveCar {
   index: number
 

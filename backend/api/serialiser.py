@@ -3,6 +3,7 @@ from state.live import MatchedLiveFrame
 from state import CarState, ApplicationState
 from udp.car_telemetry import CarTelemetryData
 from udp.lap_data import LapData
+from udp.session import SessionPacket
 
 from state.enums import enum_label, TrackId, SessionType, Weather, SafetyCarStatus
 
@@ -73,6 +74,22 @@ def serialise_state(state: ApplicationState) -> StateResponse:
 
         cars=[serialise_car(car) for car in state.cars],
     )
+
+
+def serialise_session_update(session: SessionPacket) -> SessionUpdateResponse:
+    """
+    Serialise session packet using fields that update
+    """
+
+    return SessionUpdateResponse(
+        session_uid=session.header.session_uid,
+        weather=session.weather,
+        weather_name=enum_label(Weather, session.weather),
+        track_temperature=session.track_temperature,
+        air_temperature=session.air_temperature,
+        safety_car_status=session.safety_car_status,
+        safety_car_status_name=enum_label(SafetyCarStatus, session.safety_car_status)
+    )   
 
 
 def _time_parts_to_ms(ms_part: int, minutes_part: int) -> int:

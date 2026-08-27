@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
-from api.schemas import CarStateResponse, StateResponse
-from api.serialiser import serialise_car, serialise_live_car, serialise_live_frame, serialise_state
+from api.schemas import CarStateResponse, StateResponse, SessionUpdateResponse
+from api.serialiser import serialise_car, serialise_live_car, serialise_live_frame, serialise_state, serialise_session_update
 from state.application_state import ApplicationState, CarState
 from udp.constants import NUM_CARS
 from state.live import MatchedLiveFrame
@@ -358,3 +358,31 @@ def test_serialise_live_frame():
 
     # 255 means fastest-lap value has not been set
     assert car.speed_trap_fastest_lap is None
+
+
+def test_serialise_session_update():
+    session = SimpleNamespace(
+        header=SimpleNamespace(session_uid=123456789),
+
+        weather=0,
+        track_temperature=34,
+        air_temperature=23,
+
+        safety_car_status=0
+    )
+
+    response = serialise_session_update(session)
+
+    assert isinstance(response, SessionUpdateResponse)
+
+    assert response.type == "session_update"
+    assert response.session_uid == 123456789
+
+    assert response.weather == 0
+    assert response.weather_name == "Clear"
+
+    assert response.track_temperature == 34
+    assert response.air_temperature == 23
+
+    assert response.safety_car_status == 0
+    assert response.safety_car_status_name == "None"

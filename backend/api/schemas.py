@@ -57,6 +57,25 @@ class StateResponse(BaseModel):
     cars: list[CarStateResponse]
 
 
+class SessionUpdateResponse(BaseModel):
+    """
+    Stores session data that typically changes slowly over time. Similar to StateResponse but excludes fixed fields like track
+    """
+
+    type: Literal["session_update"] = "session_update"
+
+    # use as identifier
+    session_uid: int
+
+    weather: int
+    weather_name: str
+
+    track_temperature: int
+    air_temperature: int
+
+    safety_car_status: int
+    safety_car_status_name: str
+
 
 # websocket stuff
 

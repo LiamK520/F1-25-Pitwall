@@ -3,6 +3,7 @@ import { useEffect, useState, useRef, act } from "react"
 import type {
   LiveFrame,
   StateResponse,
+  SessionUpdate,
 } from "./types/api"
 
 import TimingTower from "./components/TimingTower"
@@ -71,6 +72,32 @@ function App() {
 
       if (data.type === "live_frame") {
         latestFrameRef.current = data as LiveFrame
+      }
+
+      else if (data.type == "session_update") {
+        const update = data as SessionUpdate
+
+        // update fields thjat are in update
+
+        setState((current) => {
+          if (current == null) return current;
+
+          // ignore for now
+          if (current.session_uid !== update.session_uid) return current;
+
+          return {
+            ...current,
+
+            weather: update.weather,
+            weather_name: update.weather_name,
+
+            track_temperature: update.track_temperature,
+            air_temperature: update.air_temperature,
+
+            safety_car_status: update.safety_car_status,
+            safety_car_status_name: update.safety_car_status_name,
+          }
+        })
       }
     }
 
