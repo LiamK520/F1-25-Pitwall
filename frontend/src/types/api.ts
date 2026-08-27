@@ -19,8 +19,22 @@ export interface CarState {
 
 export interface StateResponse {
   session_uid: number | null
+
   track_id: number | null
+  track_name: string | null
+
   session_type: number | null
+  session_name: string | null
+
+  total_laps: number | null
+  weather: number | null
+  weather_name: string | null
+
+  track_temperature: number | null
+  air_temperature: number | null
+
+  safety_car_status: number | null
+  safety_car_status_name: string | null
 
   num_active_cars: number
   player_car_index: number | null

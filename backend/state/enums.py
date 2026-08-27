@@ -1,6 +1,16 @@
 from enum import Enum, IntEnum, IntFlag
 
 
+# method for enum val -> str
+def enum_label(enum_type, value: int | None) -> str | None:
+    if value is None:
+        return None
+
+    try:
+        return enum_type(value).name.replace("_", " ").strip().title()
+    except ValueError:
+        return "Unknwon ({value})"
+
 # This is major lookup table for all flags passed as ints in the UDP spec. See the appendix for more information
 
 class TeamId(IntEnum):

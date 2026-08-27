@@ -28,6 +28,7 @@ class PacketRecorder:
         self.fp = None
         self.start_time = None
 
+    # TODO: this is probably affected by in-game pausing which probably isn't good. change to use session time or something
     def record_packet(self, data: bytes):
         if not self.fp: return
 

@@ -4,6 +4,8 @@ from state import CarState, ApplicationState
 from udp.car_telemetry import CarTelemetryData
 from udp.lap_data import LapData
 
+from state.enums import enum_label, TrackId, SessionType, Weather, SafetyCarStatus
+
 # using custom serailiser to deal with nested structsures like car.participant.etc
 def serialise_car(car: CarState) -> CarStateResponse:
     return CarStateResponse(
@@ -24,13 +26,52 @@ def serialise_car(car: CarState) -> CarStateResponse:
 
 
 def serialise_state(state: ApplicationState) -> StateResponse:
+    session = state.session
+
     return StateResponse(
         session_uid=state.session_uid,
-        track_id=state.session.track_id if state.session is not None else None,
-        session_type=state.session.session_type if state.session is not None else None,
+
+        track_id=session.track_id if session is not None else None,
+        track_name=enum_label(
+            TrackId,
+            session.track_id if session is not None else None,
+        ),
+
+        session_type=session.session_type if session is not None else None,
+        session_name=enum_label(
+            SessionType,
+            session.session_type if session is not None else None,
+        ),
+
+        total_laps=session.total_laps if session is not None else None,
+
+        weather=session.weather if session is not None else None,
+        weather_name=enum_label(
+            Weather,
+            session.weather if session is not None else None,
+        ),
+
+        track_temperature=(
+            session.track_temperature if session is not None else None
+        ),
+
+        air_temperature=(
+            session.air_temperature if session is not None else None
+        ),
+
+        safety_car_status=(
+            session.safety_car_status if session is not None else None
+        ),
+
+        safety_car_status_name=enum_label(
+            SafetyCarStatus,
+            session.safety_car_status if session is not None else None,
+        ),
+
         num_active_cars=state.num_active_cars,
         player_car_index=state.player_car_index,
-        cars=[serialise_car(car) for car in state.cars]
+
+        cars=[serialise_car(car) for car in state.cars],
     )
 
 

@@ -4,7 +4,7 @@ interface TimingTowerProps {
     state: StateResponse
     frame: LiveFrame
 
-    onSelectCar: (index: number) => void
+    onSelectCar: (index: number | null) => void
 }
 
 function formatGap(ms: number): string {
@@ -39,7 +39,7 @@ function TimingTower({state, frame, onSelectCar}: TimingTowerProps) {
             <h2>Timing</h2>
             <table>
                 <thead>
-                    <tr>
+                    <tr onClick = {() => onSelectCar(null)}>
                         <th>POS</th>
                         <th>DRIVER</th>
                         <th>GAP</th>

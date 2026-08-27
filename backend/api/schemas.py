@@ -34,8 +34,22 @@ class StateResponse(BaseModel):
     """
     session_uid: int | None
 
-    track_id : int | None
+    track_id: int | None
+    track_name: str | None
+
     session_type: int | None
+    session_name: str | None
+
+    total_laps: int | None
+
+    weather: int | None
+    weather_name: str | None
+
+    track_temperature: int | None
+    air_temperature: int | None
+
+    safety_car_status: int | None
+    safety_car_status_name: str | None
 
     num_active_cars: int
     player_car_index: int | None

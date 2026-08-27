@@ -20,6 +20,17 @@ def test_serialise_empty_state():
     assert response.track_id is None
     assert response.session_type is None
 
+    assert response.total_laps is None
+    assert response.weather is None
+    assert response.track_temperature is None
+    assert response.air_temperature is None
+    assert response.safety_car_status is None
+
+    assert response.track_name == None
+    assert response.session_name == None
+    assert response.weather_name == None
+    assert response.safety_car_status_name == None
+
     assert response.num_active_cars == 0
     assert response.player_car_index is None
 
@@ -83,7 +94,15 @@ def test_serialise_state():
     state.num_active_cars = 20
     state.player_car_index = 19
 
-    state.session = SimpleNamespace(track_id=2, session_type=15)
+    state.session = SimpleNamespace(
+        track_id=2,
+        session_type=15,
+        total_laps=52,
+        weather=0,
+        track_temperature=31,
+        air_temperature=22,
+        safety_car_status=0,
+    )
 
     # test one car also
     car = state.cars[5]
@@ -101,6 +120,18 @@ def test_serialise_state():
     assert response.session_uid == 123456789
     assert response.track_id == 2
     assert response.session_type == 15
+
+    assert response.total_laps == 52
+    assert response.weather == 0
+    assert response.track_temperature == 31
+    assert response.air_temperature == 22
+    assert response.safety_car_status == 0
+
+    assert response.track_name == "Shanghai"
+    assert response.session_name == "Race"
+    assert response.weather_name == "Clear"
+    assert response.safety_car_status_name == "None"
+
     assert response.num_active_cars == 20
     assert response.player_car_index == 19
 

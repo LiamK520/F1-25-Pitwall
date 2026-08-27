@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState, useRef, act } from "react"
 
 import type {
   LiveFrame,
@@ -7,6 +7,12 @@ import type {
 
 import TimingTower from "./components/TimingTower"
 import DriverTelemetry from "./components/DriverTelemetry"
+import InfoBar from "./components/InfoBar"
+import PanelNavigator, {type DashboardTab} from "./components/PanelNavigator"
+import TrackMap from "./components/TrackMap"
+import ComparisonArea from "./components/ComparisonArea"
+
+import "./App.css"
 
 // ms
 const REFRESH_RATE = 500
@@ -20,6 +26,9 @@ function App() {
   const [wsConnected, setWsConnected] = useState(false)
 
   const [selectedCarIndex, setSelectedCarIndex] = useState<number | null>(null)
+
+  const [activeTab, setActiveTab] = useState<DashboardTab>("live")
+
 
   async function loadState() {
     const response = await fetch("/state")
@@ -89,9 +98,82 @@ function App() {
     }
   }, [])
 
+  // set content to correct dashboard
+  let content
+
+  switch (activeTab) {
+    case "live":
+      content = (
+        <div className="live-grid">
+          <aside className="timing-area">
+            {state && timingFrame && (
+              <TimingTower
+                  state={state}
+                  frame={timingFrame}
+                  onSelectCar={setSelectedCarIndex}
+              />
+            )}
+            {state && selectedCarIndex !== null && (
+                <DriverTelemetry
+                    state={state}
+                    carIndex={selectedCarIndex}
+                    latestFrameRef={latestFrameRef}
+                />
+            )}
+          </aside>
+
+          <TrackMap />
+
+          <ComparisonArea />
+        </div>
+      )
+      break
+
+    case "analysis":
+        content = (
+            <section className="analysis-panel">
+                <h2>Analysis</h2>
+                <p>Analysis panel coming soon</p>
+            </section>
+        )
+        break
+
+    case "session":
+        content = (
+            <section className="session-panel">
+                <h2>Session</h2>
+                <p>Session information coming soon</p>
+            </section>
+        )
+        break
+  }
+
 
   return (
-    <main>
+    <div className="app-shell">
+        <h1 className="app-title">
+            F1 25 Pit Wall
+        </h1>
+
+        <main className="app">
+            <InfoBar state={state} frame={timingFrame}/>
+
+            <div className="page-content">
+                {content}
+            </div>
+
+            <PanelNavigator
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+            />
+        </main>
+    </div>
+  )
+
+
+  /*
+  return (
+    <main className="app">
       <h1>F1 25 Pit Wall</h1>
 
       <h2>Backend</h2>
@@ -131,6 +213,7 @@ function App() {
       )}
     </main>
   )
+  */
 }
 
 export default App
