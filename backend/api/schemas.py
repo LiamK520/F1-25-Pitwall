@@ -182,28 +182,29 @@ class LiveFrameResponse(BaseModel):
 
 
 class MotionCarResponse(BaseModel):
+    """
+    Position and direction of a car
+    """
     index: int
 
-    world_position_x: float
-    world_position_y: float
-    world_position_z: float
+    # skipping y as probably don't need altitude in track map
+    x: float
+    z: float
 
-    world_velocity_x: float
-    world_velocity_y: float
-    world_velocity_z: float
-
-    world_forward_dir_x: int
-    world_forward_dir_y: int
-    world_forward_dir_z: int
-
-    world_right_dir_x: int
-    world_right_dir_y: int
-    world_right_dir_z: int
-
-    g_force_lateral: float
-    g_force_longitudinal: float
-    g_force_vertical: float
-
+    # direction for 2d map (unsure if will be used)
     yaw: float
-    pitch: float
-    roll: float
+
+
+class MotionFrameResponse(BaseModel):
+    """
+    Motion data for a frame containing all car
+    """
+
+    type: Literal["motion_frame"] = "motion_frame"
+
+    session_uid: int
+
+    overall_frame: int
+    session_time: float
+
+    cars: list[MotionCarResponse]

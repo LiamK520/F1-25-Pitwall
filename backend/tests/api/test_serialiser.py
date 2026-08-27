@@ -1,7 +1,8 @@
 from types import SimpleNamespace
 
-from api.schemas import CarStateResponse, StateResponse, SessionUpdateResponse
-from api.serialiser import serialise_car, serialise_live_car, serialise_live_frame, serialise_state, serialise_session_update
+from api.schemas import CarStateResponse, StateResponse, SessionUpdateResponse, MotionFrameResponse
+from api.serialiser import serialise_car, serialise_live_car, serialise_live_frame, serialise_state, serialise_session_update, \
+serialise_motion_car, serialise_motion_frame
 from state.application_state import ApplicationState, CarState
 from udp.constants import NUM_CARS
 from state.live import MatchedLiveFrame
@@ -386,3 +387,51 @@ def test_serialise_session_update():
 
     assert response.safety_car_status == 0
     assert response.safety_car_status_name == "None"
+
+
+def test_serialise_motion_frame():
+    header = SimpleNamespace(
+        session_uid=123456,
+        session_time=42.5,
+        frame_identifier=500,
+        overall_frame_identifier=700,
+    )
+
+    motion_1 = SimpleNamespace(
+        world_position_x=125.5,
+        world_position_z=-320.25,
+        yaw=1.5,
+    )
+
+    motion_2 = SimpleNamespace(
+        world_position_x=130.0,
+        world_position_z=-315.0,
+        yaw=1.6,
+    )
+
+    packet = SimpleNamespace(
+        header=header,
+        cars=(motion_1, motion_2),
+    )
+
+    response = serialise_motion_frame(packet)
+
+    assert isinstance(response, MotionFrameResponse)
+
+    assert response.type == "motion_frame"
+
+    assert response.session_uid == 123456
+    assert response.overall_frame == 700
+    assert response.session_time == 42.5
+
+    assert len(response.cars) == 2
+
+    assert response.cars[0].index == 0
+    assert response.cars[0].x == 125.5
+    assert response.cars[0].z == -320.25
+    assert response.cars[0].yaw == 1.5
+
+    assert response.cars[1].index == 1
+    assert response.cars[1].x == 130.0
+    assert response.cars[1].z == -315.0
+    assert response.cars[1].yaw == 1.6

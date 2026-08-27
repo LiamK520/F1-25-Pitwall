@@ -94,6 +94,8 @@ class ApplicationState:
 
     # latest matched lapdat and cartelem
     latest_live_frame: MatchedLiveFrame | None = None
+    # same for motion
+    latest_motion: MotionPacket | None = None
 
     # consts
     _MAX_FRAME_AGE = 10
@@ -131,6 +133,7 @@ class ApplicationState:
         self._pending_flashback_time = None
 
         self.latest_live_frame = None
+        self.latest_motion = None
 
     def update(self, packet) -> None:
         """
@@ -203,6 +206,8 @@ class ApplicationState:
             self.secondary_player_car_index = None
 
     def _update_motion(self, packet: MotionPacket) -> None:
+        self.latest_motion = packet
+
         for i, motion in enumerate(packet.cars):
             self.cars[i].motion = motion
 
@@ -430,6 +435,7 @@ class ApplicationState:
         self._lap_data_buffer.clear()
         self._telemetry_buffer.clear()
         self.latest_live_frame = None
+        self.latest_motion = None
 
 
     def _apply_flashback_to_car(self, car: CarState, target_lap_number: int, target_session_time: float) -> None:

@@ -4,6 +4,7 @@ import type {
   LiveFrame,
   StateResponse,
   SessionUpdate,
+  MotionFrame
 } from "./types/api"
 
 import TimingTower from "./components/TimingTower"
@@ -22,6 +23,7 @@ function App() {
   const [state, setState] = useState<StateResponse | null>(null)
   // use refs for frame so we dont update timing tower 20-60x a sec
   const latestFrameRef = useRef<LiveFrame | null>(null)
+  const latestMotionRef = useRef<MotionFrame | null>(null)
   const [timingFrame, setTimingFrame] = useState<LiveFrame | null>(null)
 
   const [wsConnected, setWsConnected] = useState(false)
@@ -72,6 +74,10 @@ function App() {
 
       if (data.type === "live_frame") {
         latestFrameRef.current = data as LiveFrame
+      }
+
+      else if (data.type === "motion_frame") {
+        latestMotionRef.current = data as MotionFrame
       }
 
       else if (data.type == "session_update") {
@@ -149,7 +155,7 @@ function App() {
             )}
           </aside>
 
-          <TrackMap />
+          <TrackMap latestMotionRef={latestMotionRef} latestFrameRef={latestFrameRef}/>
 
           <ComparisonArea />
         </div>

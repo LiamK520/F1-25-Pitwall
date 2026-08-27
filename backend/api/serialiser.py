@@ -4,6 +4,7 @@ from state import CarState, ApplicationState
 from udp.car_telemetry import CarTelemetryData
 from udp.lap_data import LapData
 from udp.session import SessionPacket
+from udp.motion import MotionPacket, CarMotionData
 
 from state.enums import enum_label, TrackId, SessionType, Weather, SafetyCarStatus
 
@@ -270,4 +271,30 @@ def serialise_live_frame(live_frame: MatchedLiveFrame) -> LiveFrameResponse:
         ),
 
         cars=cars,
+    )
+
+
+def serialise_motion_car(index: int, motion: CarMotionData) -> MotionCarResponse:
+    """
+    serialise the motion values required to draw car on map
+    """
+
+    return MotionCarResponse(index=index, x=motion.world_position_x, 
+                             z=motion.world_position_z, yaw=motion.yaw)
+
+
+def serialise_motion_frame(packet: MotionPacket) -> MotionFrameResponse:
+    """
+    Serialise one frame of f1 motion containing all cars
+    """
+
+    header = packet.header
+
+    cars = [serialise_motion_car(i, motion) for i, motion in enumerate(packet.cars)]
+
+    return MotionFrameResponse(
+        session_uid=header.session_uid,
+        overall_frame=header.overall_frame_identifier,
+        session_time=header.session_time,
+        cars=cars
     )

@@ -6,7 +6,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from udp.receiver import run_receiver
 from state.application_state import ApplicationState
 from api.schemas import StateResponse
-from api.serialiser import serialise_live_frame, serialise_state, serialise_session_update
+from api.serialiser import serialise_live_frame, serialise_state, serialise_session_update, serialise_motion_frame
 
 import asyncio
 
@@ -45,6 +45,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     last_live_sent: tuple[int, int] | None = None
     last_session_sent: tuple[int, int, int, int, int] | None = None
+    last_motion_sent: tuple[int, int] | None = None
 
     try:
         while True:
@@ -60,6 +61,18 @@ async def websocket_endpoint(websocket: WebSocket):
                     await websocket.send_json(response.model_dump())
 
                     last_live_sent = live_key
+
+            motion = state.latest_motion
+
+            if motion is not None:
+                motion_key = (motion.header.session_uid, motion.header.overall_frame_identifier)
+
+                if motion_key != last_motion_sent:
+                    response = serialise_motion_frame(motion)
+
+                    await websocket.send_json(response.model_dump())
+
+                    last_motion_sent = motion_key
 
             session = state.session
 

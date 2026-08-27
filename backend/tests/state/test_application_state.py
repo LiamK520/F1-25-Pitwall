@@ -3,6 +3,7 @@ import struct
 import numpy as np
 import pytest
 from dataclasses import replace
+from types import SimpleNamespace
 
 from state.application_state import ApplicationState, CarState
 from state.history import LapTelemetryBuffer
@@ -31,6 +32,7 @@ from udp.lap_positions import LapPositionsPacket
 from udp.final_classification import FinalClassificationPacket
 from udp.lap_data import LapDataPacket
 from udp.car_telemetry import CarTelemetryPacket
+from udp.motion import MotionPacket
 
 
 def make_damage_packet(
@@ -1302,3 +1304,34 @@ def test_new_match_replaces_latest_live_frame():
     assert state.latest_live_frame is not first_frame
     assert state.latest_live_frame.lap_data is lap_packet_2
     assert state.latest_live_frame.telemetry is telemetry_packet_2
+
+
+def test_motion_packet_updates_latest_motion():
+    state = ApplicationState()
+
+    header = SimpleNamespace(
+        session_uid=123456,
+        player_car_index=0,
+        secondary_player_car_index=255,
+    )
+
+    motions = tuple(
+        SimpleNamespace(world_position_x=float(i))
+        for i in range(NUM_CARS)
+    )
+
+    packet = MotionPacket(
+        header=header,
+        cars=motions,
+    )
+
+    state.update(packet)
+
+    assert state.latest_motion is packet
+
+    for i in range(NUM_CARS):
+        assert state.cars[i].motion is motions[i]
+
+    state.reset()
+
+    assert state.latest_motion is None

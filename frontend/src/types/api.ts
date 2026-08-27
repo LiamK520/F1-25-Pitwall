@@ -145,3 +145,22 @@ export interface LiveFrame {
 
   cars: LiveCar[]
 }
+
+export interface MotionCar {
+    index: number
+
+    x: number
+    z: number
+
+    yaw: number
+}
+
+export interface MotionFrame {
+    type: "motion_frame"
+
+    session_uid: number
+    overall_frame: number
+    session_time: number
+
+    cars: MotionCar[]
+}
