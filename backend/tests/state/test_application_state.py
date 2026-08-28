@@ -19,6 +19,7 @@ from tests.udp.test_lap_positions import make_lap_positions_packet
 from tests.udp.test_final_classification import make_final_classification_packet
 from tests.udp.test_lap_data import make_lap_data_packet
 from tests.udp.test_car_telemetry import make_car_telemetry_packet
+from tests.udp.test_motion import make_car_motion
 
 from udp.car_damage import CarDamagePacket
 from udp.constants import NUM_CARS
@@ -510,6 +511,23 @@ def make_state_telemetry_packet(
         cars=tuple(cars),
     )
 
+def make_state_motion_packet(frame: int) -> MotionPacket:
+    """
+    make motion packet for frame testing
+    """
+
+    data = make_header(
+        PacketId.MOTION,
+        session_uid=TEST_SESSION_UID,
+        session_time=frame / 60.0,
+        frame_identifier=frame,
+    )
+
+    for i in range(NUM_CARS):
+        data += make_car_motion(i)
+
+    return MotionPacket.from_bytes(data)
+
 # NOTE: If the other packets aligned by frame (e.g. motion) are later added these tests will probably need to be rewritten
 
 def test_frame_alignment_lap_telemetry_records_sample():
@@ -528,9 +546,15 @@ def test_frame_alignment_lap_telemetry_records_sample():
     # lap arrival first
     state.update(lap_packet)
 
-    # frame 100 should be in lap buffer but not telem
-    assert 100 in state._lap_data_buffer
-    assert 100 not in state._telemetry_buffer
+    # frame 100 should be in buffer
+    assert 100 in state._frame_buffer
+
+    frame_packets = state._frame_buffer[100]
+
+    assert frame_packets.lap_data is lap_packet
+    assert frame_packets.telemetry is None
+    assert frame_packets.motion is None
+    assert frame_packets.live_processed is False
 
     car = state.cars[0]
 
@@ -540,9 +564,12 @@ def test_frame_alignment_lap_telemetry_records_sample():
     # now telem arrives
     state.update(telemetry_packet)
 
-    # now frame 100 should be in neither buffer due to match
-    assert 100 not in state._lap_data_buffer
-    assert 100 not in state._telemetry_buffer
+    # now frame contains both
+    frame_packets = state._frame_buffer[100]
+
+    assert frame_packets.lap_data is lap_packet
+    assert frame_packets.telemetry is telemetry_packet
+    assert frame_packets.live_processed is True
 
     assert len(car.current_lap_telemetry.lap_distance) == 1
     assert car.current_lap_telemetry.lap_distance[0] == pytest.approx(500.0)
@@ -566,20 +593,27 @@ def test_frame_alignment_telemetry_lap_records_sample():
     # telem arrival first
     state.update(telemetry_packet)
 
-    # frame 100 should be in telem buffer but not lap
-    assert 100 not in state._lap_data_buffer
-    assert 100 in state._telemetry_buffer
+    # frame 100 should be in 
+    assert 100 in state._frame_buffer
+
+    frame_packets = state._frame_buffer[100]
+
+    assert frame_packets.lap_data is None
+    assert frame_packets.telemetry is telemetry_packet
+    assert frame_packets.motion is None
+    assert frame_packets.live_processed is False
 
     car = state.cars[0]
 
     # now telem arrives
     state.update(lap_packet)
 
-    # now frame 100 should be in neither buffer due to match
-    assert 100 not in state._lap_data_buffer
-    assert 100 not in state._telemetry_buffer
+    frame_packets = state._frame_buffer[100]
 
-    car = state.cars[0]
+    assert frame_packets.lap_data is lap_packet
+    assert frame_packets.telemetry is telemetry_packet
+    assert frame_packets.motion is None
+    assert frame_packets.live_processed is True
 
     assert car.current_lap_telemetry is not None
     assert len(car.current_lap_telemetry.lap_distance) == 1
@@ -597,9 +631,21 @@ def test_different_frames_dont_record():
     state.update(lap_packet)
     state.update(telemetry_packet)
 
-    # both should be in buffers
-    assert 555 in state._lap_data_buffer
-    assert 556 in state._telemetry_buffer
+    # both should be in buffer
+    assert 555 in state._frame_buffer
+    assert 556 in state._frame_buffer
+
+    frame_555 = state._frame_buffer[555]
+    frame_556 = state._frame_buffer[556]
+
+    assert frame_555.lap_data is lap_packet
+    assert frame_555.telemetry is None
+    assert frame_555.live_processed is False
+
+    assert frame_556.lap_data is None
+    assert frame_556.telemetry is telemetry_packet
+    assert frame_556.live_processed is False
+
 
     car = state.cars[0]
 
@@ -652,10 +698,15 @@ def test_matched_frame_before_race_does_not_create_history():
     for car in state.cars:
         assert car.current_lap_telemetry is None
 
-    # packets matched and consumed
+    # packets matched
 
-    assert 100 not in state._lap_data_buffer
-    assert 100 not in state._telemetry_buffer
+    assert 100 in state._frame_buffer
+
+    frame_packets = state._frame_buffer[100]
+
+    assert frame_packets.lap_data is lap_packet
+    assert frame_packets.telemetry is telemetry_packet
+    assert frame_packets.live_processed is True
 
 
 def test_old_frames_removed():
@@ -668,8 +719,8 @@ def test_old_frames_removed():
     state.update(lap_packet)
     state.update(telemetry_packet)
 
-    assert 100 in state._lap_data_buffer
-    assert 101 in state._telemetry_buffer
+    assert 100 in state._frame_buffer
+    assert 101 in state._frame_buffer
 
     # frame 110 shoudl clear 100 out
 
@@ -677,16 +728,18 @@ def test_old_frames_removed():
 
     state.update(new_packet)
 
-    assert 100 not in state._lap_data_buffer
-    assert 110 in state._lap_data_buffer
+    assert 100 not in state._frame_buffer
+    assert 101 in state._frame_buffer
+    assert 110 in state._frame_buffer
 
     # 111 should boot out 101
     newer_packet = make_state_telemetry_packet(111)
 
     state.update(newer_packet)
 
-    assert 101 not in state._telemetry_buffer
-    assert 111 in state._telemetry_buffer
+    assert 101 not in state._frame_buffer
+    assert 110 in state._frame_buffer
+    assert 111 in state._frame_buffer
 
 
 def test_lap_change_completes_buffer():
@@ -1309,29 +1362,65 @@ def test_new_match_replaces_latest_live_frame():
 def test_motion_packet_updates_latest_motion():
     state = ApplicationState()
 
-    header = SimpleNamespace(
-        session_uid=123456,
-        player_car_index=0,
-        secondary_player_car_index=255,
-    )
-
-    motions = tuple(
-        SimpleNamespace(world_position_x=float(i))
-        for i in range(NUM_CARS)
-    )
-
-    packet = MotionPacket(
-        header=header,
-        cars=motions,
-    )
+    packet = make_state_motion_packet(100)
 
     state.update(packet)
 
     assert state.latest_motion is packet
 
     for i in range(NUM_CARS):
-        assert state.cars[i].motion is motions[i]
+        assert state.cars[i].motion is packet.cars[i]
 
     state.reset()
 
     assert state.latest_motion is None
+
+
+def test_frame_buffer_groups_packet():
+    state = ApplicationState()
+
+    lap_packet = make_state_lap_packet(100, 1, 500.0)
+    telemetry_packet = make_state_telemetry_packet(100, 250)
+    motion_packet = make_state_motion_packet(100)
+
+    state.update(lap_packet)
+    state.update(telemetry_packet)
+    state.update(motion_packet)
+
+    assert 100 in state._frame_buffer
+
+    frame_packets = state._frame_buffer[100]
+
+    assert frame_packets.lap_data is lap_packet
+    assert frame_packets.telemetry is telemetry_packet
+    assert frame_packets.motion is motion_packet
+
+    assert frame_packets.live_processed is True
+    assert frame_packets.track_processed is False
+
+
+def test_late_motion_does_not_reprocess_live_frame():
+    state = ApplicationState()
+
+    lap_packet = make_state_lap_packet(100, 1, 500.0)
+    telemetry_packet = make_state_telemetry_packet(100, 250)
+    motion_packet = make_state_motion_packet(100)
+
+    state.update(lap_packet)
+    state.update(telemetry_packet)
+
+    car = state.cars[0]
+
+    assert car.current_lap_telemetry is not None
+    assert len(car.current_lap_telemetry.lap_distance) == 1
+
+    # motion inbound so frame 100 is handled again
+    state.update(motion_packet)
+
+    # make sure we dont process telem stuff again
+    assert len(car.current_lap_telemetry.lap_distance) == 1
+
+    frame_packets = state._frame_buffer[100]
+
+    assert frame_packets.live_processed is True
+    assert frame_packets.motion is motion_packet

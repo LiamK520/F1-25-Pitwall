@@ -20,7 +20,7 @@ from udp.lap_positions import LapPositionsPacket
 from udp.final_classification import FinalClassificationPacket
 
 from state.history import LapTelemetry, LapTelemetryBuffer
-from state.live import MatchedLiveFrame
+from state.live import MatchedLiveFrame, FramePackets
 
 
 @dataclass
@@ -84,9 +84,8 @@ class ApplicationState:
     # i dont know if i'll use this but keep for now
     secondary_player_car_index: int | None = None
     
-    # private buffers for syncing
-    _telemetry_buffer: dict[int, CarTelemetryPacket] = field(default_factory=dict)
-    _lap_data_buffer: dict[int, LapDataPacket] = field(default_factory=dict)
+    # packets with shared frame
+    _frame_buffer: dict[int, FramePackets] = field(default_factory=dict)
 
     # flashback stuff
     _pending_flashback_time: float | None = None
@@ -126,8 +125,7 @@ class ApplicationState:
         self.final_classification = None
         self.next_front_wing_value = None
 
-        self._telemetry_buffer.clear()
-        self._lap_data_buffer.clear()
+        self._frame_buffer.clear()
 
         self._pending_flashback_frame = None
         self._pending_flashback_time = None
@@ -211,6 +209,16 @@ class ApplicationState:
         for i, motion in enumerate(packet.cars):
             self.cars[i].motion = motion
 
+        frame = packet.header.overall_frame_identifier
+
+        # get frame packet if exists or make new
+        frame_packets = self._frame_buffer.setdefault(frame, FramePackets())
+
+        frame_packets.motion = packet
+
+        self._try_process_frame(frame)
+        self._clean_frame_buffer(frame)
+
     def _update_participants(self, packet: ParticipantsPacket):
         self.num_active_cars = packet.num_active_cars
 
@@ -238,12 +246,12 @@ class ApplicationState:
 
         frame = packet.header.overall_frame_identifier
 
-        self._lap_data_buffer[frame] = packet
+        frame_packets = self._frame_buffer.setdefault(frame, FramePackets())
 
-        self._try_frame_match(frame)
+        frame_packets.lap_data = packet
 
-        # should be inexepnsive so fine to do on each call
-        self._clean_frame_buffers(frame)
+        self._try_process_frame(frame)
+        self._clean_frame_buffer(frame)
 
     def _update_telemetry(self, packet: CarTelemetryPacket) -> None:
         for i, telem in enumerate(packet.cars):
@@ -253,12 +261,12 @@ class ApplicationState:
 
         frame = packet.header.overall_frame_identifier
 
-        self._telemetry_buffer[frame] = packet
+        frame_packets = self._frame_buffer.setdefault(frame, FramePackets())
 
-        self._try_frame_match(frame)
+        frame_packets.telemetry = packet
 
-        # should be inexepnsive so fine to do on each call
-        self._clean_frame_buffers(frame)
+        self._try_process_frame(frame)
+        self._clean_frame_buffer(frame)
 
     def _update_status(self, packet: CarStatusPacket) -> None:
         for i, status in enumerate(packet.cars):
@@ -295,35 +303,43 @@ class ApplicationState:
             self.lap_positions[lap_idx] = pos
 
 
-    def _try_frame_match(self, frame: int) -> None:
+    def _try_process_frame(self, frame: int) -> None:
         """
-        Tries to align a CarTelemetryPacket and a LapData packet on the specified frame.
-
-        The frame specified should refer to the packet header's overall_frame_identifier field.
-
-        If aligned packets exist, the sample is logged and they are removed from the buffer.
+        Tries to process the current frame using the packets it contains
         """
-        if frame not in self._telemetry_buffer or frame not in self._lap_data_buffer:
-            return None
 
-        # frame match, record the frame
-        telem_packet = self._telemetry_buffer[frame]
-        lap_packet = self._lap_data_buffer[frame]
+        frame_packets = self._frame_buffer.get(frame)
 
-        self.latest_live_frame = MatchedLiveFrame(lap_packet, telem_packet)
+        # shouldn't happen but just in case
+        if frame_packets is None:
+            return
+
+        # if we have lap data and telem, we can record telemetry
+        if frame_packets.lap_data is not None and frame_packets.telemetry is not None and not frame_packets.live_processed:
+            self._process_live_frame(frame_packets.lap_data, frame_packets.telemetry)
+            frame_packets.live_processed = True
+
+        # todo: motion for track
+
+    
+    def _process_live_frame(self, lap_packet: LapDataPacket, telemetry_packet: CarTelemetryPacket) -> None:
+        """
+        process lap data and telemetry info that relate to the same frame
+        """
+
+        self.latest_live_frame = MatchedLiveFrame(lap_packet, telemetry_packet)
 
         for i in range(NUM_CARS):
             car = self.cars[i]
-            telem = telem_packet.cars[i]
+
             lap = lap_packet.cars[i]
-            time = telem_packet.header.session_time
+            telem = telemetry_packet.cars[i]
+
+            time = telemetry_packet.header.session_time
 
             self._record_telemetry_sample(car, lap, telem, time)
 
-        del self._telemetry_buffer[frame]
-        del self._lap_data_buffer[frame]
-
-    def _clean_frame_buffers(self, current_frame: int) -> None:
+    def _clean_frame_buffer(self, current_frame: int) -> None:
         """
         Throws away packets that unlikely to be aligned due to packet loss.
 
@@ -335,13 +351,9 @@ class ApplicationState:
         # looping over keys is probably fine as buffer size should be max 10
         # in practice it'll probably be even smaller due to alignments
 
-        for frame in list(self._lap_data_buffer):
+        for frame in list(self._frame_buffer):
             if frame <= thresh:
-                del self._lap_data_buffer[frame]
-
-        for frame in list(self._telemetry_buffer):
-            if frame <= thresh:
-                del self._telemetry_buffer[frame]
+                del self._frame_buffer[frame]
         
 
     # TODO: flashback will need to be handled somehow. figure that out later
@@ -432,8 +444,7 @@ class ApplicationState:
         self._pending_flashback_frame = flashback.flashback_frame_identifier
 
         # clear these as the old frames are uselss now
-        self._lap_data_buffer.clear()
-        self._telemetry_buffer.clear()
+        self._frame_buffer.clear()
         self.latest_live_frame = None
         self.latest_motion = None
 
