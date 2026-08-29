@@ -22,6 +22,8 @@ from udp.final_classification import FinalClassificationPacket
 from state.history import LapTelemetry, LapTelemetryBuffer
 from state.live import MatchedLiveFrame, FramePackets
 
+from track import TrackBuilder
+
 
 @dataclass
 class CarState:
@@ -96,6 +98,8 @@ class ApplicationState:
     # same for motion
     latest_motion: MotionPacket | None = None
 
+    track_builder: TrackBuilder | None = None
+
     # consts
     _MAX_FRAME_AGE = 10
 
@@ -133,6 +137,8 @@ class ApplicationState:
         self.latest_live_frame = None
         self.latest_motion = None
 
+        self.track_builder = None
+
     def update(self, packet) -> None:
         """
         Updates the state with the relevant information in the supplised packet
@@ -158,7 +164,7 @@ class ApplicationState:
             self._update_damage(packet)
 
         elif isinstance(packet, SessionPacket):
-            self.session = packet
+            self._update_session(packet)
 
         elif isinstance(packet, EventPacket):
             self.events.append(packet)
@@ -276,6 +282,12 @@ class ApplicationState:
         for i, dmg in enumerate(packet.cars):
             self.cars[i].damage = dmg
 
+    def _update_session(self, packet: SessionPacket) -> None:
+        self.session = packet
+
+        if self.track_builder is None:
+            self.track_builder = TrackBuilder(packet.track_length)
+
     def _update_setups(self, packet: CarSetupPacket) -> None:
         for i, setup in enumerate(packet.car_setup_data):
             self.cars[i].setup = setup
@@ -319,7 +331,20 @@ class ApplicationState:
             self._process_live_frame(frame_packets.lap_data, frame_packets.telemetry)
             frame_packets.live_processed = True
 
-        # todo: motion for track
+        # track stuff
+
+        if self.track_builder is not None and frame_packets.lap_data is not None and frame_packets.motion is not None and not frame_packets.track_processed:
+            self.track_builder.process_frame(frame_packets.lap_data, frame_packets.motion)
+
+            frame_packets.track_processed = True
+
+            # NOTE: terminal testing for now to see how coverage works out. appears to get to 100% after a single lap which is good
+            # tomorrow investiage indiviual bins, bin density etc.
+            if frame % 300 == 0:
+                print(
+                    f"Track samples: {len(self.track_builder.samples)} | "
+                    f"Coverage: {self.track_builder.coverage():.1%}"
+                )
 
     
     def _process_live_frame(self, lap_packet: LapDataPacket, telemetry_packet: CarTelemetryPacket) -> None:

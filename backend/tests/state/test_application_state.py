@@ -101,6 +101,7 @@ def test_application_state_initialises_car_slots():
     assert state.lap_positions == {}
     assert state.final_classification is None
     assert state.next_front_wing_value is None
+    assert state.track_builder is None
 
 
 def test_damage_packet_updates_correct_cars():
@@ -174,6 +175,9 @@ def test_session_packet_updates_session_state():
     assert state.session.session_type == 15
     assert state.session.track_id == 7
     assert state.session.track_length == 5891
+
+    assert state.track_builder is not None
+    assert state.track_builder.track_length == 5891
 
 
 def test_event_packet_is_added_to_event_history():
@@ -402,6 +406,12 @@ def test_reset_clears_application_state():
     assert state.cars[7].damage is not None
     assert len(state.events) == 1
 
+    session_packet = SessionPacket.from_bytes(make_session_packet())
+
+    state.update(session_packet)
+
+    assert state.track_builder is not None
+
     state.reset()
 
     # check everythin gone
@@ -432,11 +442,10 @@ def test_reset_clears_application_state():
     assert state.final_classification is None
     assert state.next_front_wing_value is None
     assert state.latest_live_frame is None
+    assert state.track_builder is None
 #
 # frame alignment tests
 #
-
-TEST_SESSION_UID = 1234567
 
 TEST_SESSION_UID = 123456789
 
@@ -1379,6 +1388,10 @@ def test_motion_packet_updates_latest_motion():
 def test_frame_buffer_groups_packet():
     state = ApplicationState()
 
+    state.update(SessionPacket.from_bytes(make_session_packet()))
+
+    assert state.track_builder is not None
+
     lap_packet = make_state_lap_packet(100, 1, 500.0)
     telemetry_packet = make_state_telemetry_packet(100, 250)
     motion_packet = make_state_motion_packet(100)
@@ -1396,7 +1409,7 @@ def test_frame_buffer_groups_packet():
     assert frame_packets.motion is motion_packet
 
     assert frame_packets.live_processed is True
-    assert frame_packets.track_processed is False
+    assert frame_packets.track_processed is True
 
 
 def test_late_motion_does_not_reprocess_live_frame():
@@ -1424,3 +1437,64 @@ def test_late_motion_does_not_reprocess_live_frame():
 
     assert frame_packets.live_processed is True
     assert frame_packets.motion is motion_packet
+
+
+def test_lap_motion_pair_records_track_samples():
+    state = ApplicationState()
+
+    state.update(SessionPacket.from_bytes(make_session_packet()))
+
+    assert state.track_builder is not None
+
+    lap_packet = make_state_lap_packet(frame=100, lap_number=1, lap_distance=500.0)
+
+    motion_packet = make_state_motion_packet(100)
+
+    state.update(lap_packet)
+
+    assert len(state.track_builder.samples) == 0
+
+    # complete track pair
+    state.update(motion_packet)
+
+    assert len(state.track_builder.samples) == NUM_CARS
+
+    frame_packets = state._frame_buffer[100]
+
+    assert frame_packets.track_processed is True
+
+    first = state.track_builder.samples[0]
+
+    assert first.car_index == 0
+    assert first.lap_number == 1
+    assert first.lap_distance == pytest.approx(500.0)
+
+    assert first.x == pytest.approx(motion_packet.cars[0].world_position_x)
+
+    assert first.z == pytest.approx(motion_packet.cars[0].world_position_z)
+
+
+def test_track_frame_is_only_processed_once():
+    state = ApplicationState()
+
+    state.update(SessionPacket.from_bytes(make_session_packet()))
+
+    assert state.track_builder is not None
+
+    lap_packet = make_state_lap_packet(frame=100, lap_number=1, lap_distance=500.0)
+
+    motion_packet = make_state_motion_packet(100)
+    telemetry_packet = make_state_telemetry_packet(100)
+
+    state.update(lap_packet)
+    state.update(motion_packet)
+
+    assert len(state.track_builder.samples) == NUM_CARS
+
+    # consider frame again
+    state.update(telemetry_packet)
+
+    # ensure we dont process that sample again
+    assert len(state.track_builder.samples) == NUM_CARS
+
+    assert state._frame_buffer[100].track_processed is True
