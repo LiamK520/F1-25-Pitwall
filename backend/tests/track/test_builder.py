@@ -2,7 +2,8 @@ from dataclasses import replace
 
 import pytest
 
-from track.builder import TrackBuilder, TrackSample, TrackPoint
+from track.builder import TrackBuilder, TrackSample
+from track.geometry import TrackPoint, TrackMetadata, TrackGeometry
 
 from udp.constants import NUM_CARS
 from udp.lap_data import LapDataPacket
@@ -14,6 +15,31 @@ from tests.udp.test_lap_data import make_lap_data_packet
 from tests.udp.test_motion import make_car_motion
 
 TRACK_LENGTH = 5000
+
+
+# helper for coverage
+def add_car_coverage(builder: TrackBuilder, num_bins: int, num_cars: int) -> None:
+    for bin_index in range(num_bins):
+        dist = bin_index * builder.BIN_SIZE + 1.0
+
+        for car_index in range(num_cars):
+            builder.samples.append(TrackSample(
+                car_index=car_index,
+                lap_number=1,
+                lap_distance=dist,
+                x=dist,
+                z=dist
+            ))
+
+
+def make_track_metadata(track_length: int = TRACK_LENGTH) -> TrackMetadata:
+    return TrackMetadata(
+        track_id=7,
+        track_length=track_length,
+        sector_2_start=2000.0,
+        sector_3_start=4000.0,
+        marshal_zone_starts=(500.0, 2500.0),
+    )
 
 
 def make_track_motion_packet(frame: int = 100) -> MotionPacket:
@@ -49,13 +75,13 @@ def make_track_lap_packet(frame: int = 100) -> LapDataPacket:
 # tests
 
 def test_builder_starts_with_no_samples():
-    builder = TrackBuilder(TRACK_LENGTH)
+    builder = TrackBuilder(make_track_metadata())
 
     assert builder.samples == []
 
 
 def test_process_frame_records_samples_for_all_usable_cars():
-    builder = TrackBuilder(TRACK_LENGTH)
+    builder = TrackBuilder(make_track_metadata())
 
     lap_packet = make_track_lap_packet(100)
     motion_packet = make_track_motion_packet(100)
@@ -85,7 +111,7 @@ def test_process_frame_records_samples_for_all_usable_cars():
 
 
 def test_process_frame_excludes_lap_zero():
-    builder = TrackBuilder(TRACK_LENGTH)
+    builder = TrackBuilder(make_track_metadata())
 
     lap_packet = make_track_lap_packet(100)
     motion_packet = make_track_motion_packet(100)
@@ -104,7 +130,7 @@ def test_process_frame_excludes_lap_zero():
 
 
 def test_process_frame_excludes_pit_cars():
-    builder = TrackBuilder(TRACK_LENGTH)
+    builder = TrackBuilder(make_track_metadata())
 
     lap_packet = make_track_lap_packet(100)
     motion_packet = make_track_motion_packet(100)
@@ -123,7 +149,7 @@ def test_process_frame_excludes_pit_cars():
 
 
 def test_process_frame_excludes_non_active_cars():
-    builder = TrackBuilder(TRACK_LENGTH)
+    builder = TrackBuilder(make_track_metadata())
 
     lap_packet = make_track_lap_packet(100)
     motion_packet = make_track_motion_packet(100)
@@ -142,7 +168,7 @@ def test_process_frame_excludes_non_active_cars():
 
 
 def test_process_frame_appends_new_samples():
-    builder = TrackBuilder(TRACK_LENGTH)
+    builder = TrackBuilder(make_track_metadata())
 
     lap_packet_1 = make_track_lap_packet(100)
     motion_packet_1 = make_track_motion_packet(100)
@@ -160,7 +186,7 @@ def test_process_frame_appends_new_samples():
 
 
 def test_build_points_starts_empty():
-    builder = TrackBuilder(track_length=100.0)
+    builder = TrackBuilder(make_track_metadata(100))
 
     points = builder.build_points()
 
@@ -170,7 +196,7 @@ def test_build_points_starts_empty():
 
 
 def test_build_points_creates_point_in_correct_bin():
-    builder = TrackBuilder(track_length=100.0)
+    builder = TrackBuilder(make_track_metadata(100))
 
     builder.samples.append(
         TrackSample(
@@ -195,7 +221,7 @@ def test_build_points_creates_point_in_correct_bin():
 
 
 def test_build_points_uses_median_position():
-    builder = TrackBuilder(track_length=100.0)
+    builder = TrackBuilder(make_track_metadata(100))
 
     builder.samples.extend([
         TrackSample(0, 1, 11.0, 100.0, 200.0),
@@ -216,7 +242,7 @@ def test_build_points_uses_median_position():
 
 
 def test_build_points_keeps_bins_separate():
-    builder = TrackBuilder(track_length=100.0)
+    builder = TrackBuilder(make_track_metadata(100))
 
     builder.samples.extend([
         TrackSample(0, 1, 2.0, 10.0, 20.0),
@@ -232,7 +258,7 @@ def test_build_points_keeps_bins_separate():
 
 
 def test_build_points_ignores_negative_distance():
-    builder = TrackBuilder(track_length=100.0)
+    builder = TrackBuilder(make_track_metadata(100))
 
     builder.samples.append(
         TrackSample(
@@ -249,8 +275,24 @@ def test_build_points_ignores_negative_distance():
     assert all(point is None for point in points)
 
 
+def test_build_points_ignores_dist_gt_len():
+    # dist > len should not be possible so the bin should not be created and sample not stored
+    builder = TrackBuilder(make_track_metadata(100))
+
+    builder.samples.append(TrackSample(
+        car_index=0,
+        lap_number=1,
+        lap_distance=105.0,
+        x=999.0,
+        z=999.0
+    ))
+
+    points = builder.build_points()
+
+    assert all(point is None for point in points)
+
 def test_coverage_empty():
-    builder = TrackBuilder(100.0)
+    builder = TrackBuilder(make_track_metadata(100))
 
     coverage = builder.coverage()
 
@@ -258,7 +300,7 @@ def test_coverage_empty():
 
 
 def test_coverage_partial():
-    builder = TrackBuilder(100.0)
+    builder = TrackBuilder(make_track_metadata(100))
 
     builder.samples.extend([
         TrackSample(0, 1, 2.0, 10.0, 20.0),   # bin 0
@@ -273,7 +315,7 @@ def test_coverage_partial():
 
 
 def test_coverage_full():
-    builder = TrackBuilder(10.0)
+    builder = TrackBuilder(make_track_metadata(10))
 
     builder.samples.extend([
         TrackSample(0, 1, 2.0, 10.0, 20.0),   # bin 0
@@ -287,7 +329,7 @@ def test_coverage_full():
 
 
 def test_coverage_duplicate_bins():
-    builder = TrackBuilder(track_length=100.0)
+    builder = TrackBuilder(make_track_metadata(100))
 
     builder.samples.extend([
         TrackSample(0, 1, 11.0, 100.0, 200.0),
@@ -300,3 +342,219 @@ def test_coverage_duplicate_bins():
 
     # all samples lie in same bin so 1/20
     assert coverage == pytest.approx(0.05)
+
+
+def test_sample_coutns():
+    builder = TrackBuilder(make_track_metadata(20))
+
+    builder.samples.extend([
+        TrackSample(0, 1, 1.0, 10.0, 20.0),
+        TrackSample(1, 1, 2.0, 11.0, 21.0),
+        TrackSample(2, 1, 7.0, 12.0, 22.0),
+    ])
+
+    assert builder.sample_counts() == [2, 1, 0, 0]
+
+
+def test_car_counts_only_counts_unique_cars():
+    builder = TrackBuilder(make_track_metadata(20))
+
+    builder.samples.extend([
+        TrackSample(0, 1, 1.0, 10.0, 20.0),
+        TrackSample(0, 1, 2.0, 11.0, 21.0),
+        TrackSample(3, 1, 3.0, 12.0, 22.0),
+        TrackSample(5, 1, 7.0, 13.0, 23.0),
+    ])
+
+    # 3 samples in bin 1 but only 2 cars
+    assert builder.car_counts() == [2, 1, 0, 0]
+
+
+def test_ready_to_finalise_requires_car_coverage():
+    builder = TrackBuilder(make_track_metadata(500))
+
+    # cover all bins with 1 car only
+    add_car_coverage(builder, num_bins=100, num_cars=1)
+
+    assert builder.coverage() == pytest.approx(1.0)
+    assert builder.ready_to_finalise() is False
+
+
+def test_ready_to_finalise_requirement_met():
+    builder = TrackBuilder(make_track_metadata(500))
+
+    # 10 cars, 99% coverage. bang on goal
+    add_car_coverage(builder, num_bins=99, num_cars=10)
+
+    # still need raw coverage for final bin but less than 10
+    builder.samples.append(TrackSample(
+        car_index=0,
+        lap_number=1,
+        lap_distance=496.0,
+        x=496.0,
+        z=496.0
+    ))
+
+    assert builder.coverage() == pytest.approx(1.0)
+    assert builder.car_coverage(10) == pytest.approx(0.99)
+    assert builder.ready_to_finalise() is True
+
+def test_ready_to_finalise_requirement_not_met():
+    builder = TrackBuilder(make_track_metadata(5000))
+
+    # 10 cars, 98.9% coverage just under goal
+    add_car_coverage(builder, num_bins=989, num_cars=10)
+
+    #  this fills all dists for last 11 bins
+    for distance in range(4446, 4997, 5):
+        builder.samples.append(TrackSample(
+                car_index=0,
+                lap_number=1,
+                lap_distance=distance,
+                x=distance,
+                z=distance,
+            ))
+
+    assert builder.coverage() == pytest.approx(1.0)
+    assert builder.car_coverage(10) == pytest.approx(0.989)
+    assert builder.ready_to_finalise() is False
+
+
+def test_ready_to_finalise_coverage_not_met():
+    builder = TrackBuilder(make_track_metadata(500))
+    
+    # 10 cars, 99% coverage. bang on goal
+    add_car_coverage(builder, num_bins=99, num_cars=10)
+
+    # no extra coverage this time
+    assert builder.coverage() == pytest.approx(0.99)
+    assert builder.car_coverage(10) == pytest.approx(0.99)
+    assert builder.ready_to_finalise() is False
+
+
+def test_finalise_reject_incomplete():
+    builder = TrackBuilder(make_track_metadata())
+
+    with pytest.raises(RuntimeError):
+        builder.finalise()
+
+
+def test_finalise_accepts_complete():
+    builder = TrackBuilder(make_track_metadata(track_length=500))
+
+    # 100 bins, all with 10 cars
+    add_car_coverage(builder, num_bins=100, num_cars=10)
+
+    geometry = builder.finalise()
+
+    assert isinstance(geometry, TrackGeometry)
+
+    assert geometry.track_id == builder.metadata.track_id
+    assert geometry.track_length == 500
+
+    assert geometry.sector_2_start == builder.metadata.sector_2_start
+    assert geometry.sector_3_start == builder.metadata.sector_3_start
+    assert geometry.marshal_zone_starts == builder.metadata.marshal_zone_starts
+
+    assert len(geometry.points) == 100
+
+
+def test_finalise_correct_bounds():
+    builder = builder = TrackBuilder(make_track_metadata(track_length=500))
+
+    add_car_coverage(builder, num_bins=100, num_cars=10)
+
+    geometry = builder.finalise()
+
+    # helper sticks bins at 1, 6 etc. up to 496 for both x and z
+    assert geometry.min_x == pytest.approx(1.0)
+    assert geometry.max_x == pytest.approx(496.0)
+
+    assert geometry.min_z == pytest.approx(1.0)
+    assert geometry.max_z == pytest.approx(496.0)
+
+
+def test_interploate_midpoint():
+    builder = TrackBuilder(make_track_metadata())
+
+    point1 = TrackPoint(10, 20, 50)
+    point2 = TrackPoint(20, 30, 10)
+
+    point3 = builder._interpolate_point(point1, point2, 15)
+
+    assert point3.distance == 15
+    assert point3.x == pytest.approx(25)
+    assert point3.z == pytest.approx(30)
+
+
+def test_interpolate_not_midpoint():
+    builder = TrackBuilder(make_track_metadata())
+
+    point1 = TrackPoint(100, 320, 80)
+    point2 = TrackPoint(500, 60, 180)
+
+    # 400 = 75%
+    point3 = builder._interpolate_point(point1, point2, 400)
+
+    assert point3.distance == 400
+    # 320 - 60 = 260 * 0.25 = 65, 60 _ 65 = 125
+    assert point3.x == pytest.approx(125)
+    # 180 - 80 = 100 * 0.25 = 25, 180 - 25 = 155
+    assert point3.z == pytest.approx(155)
+
+
+def test_insert_point_between_points():
+    builder = TrackBuilder(make_track_metadata())
+
+    points = [
+        TrackPoint(10, 20, 50),
+        TrackPoint(20, 30, 10),
+        TrackPoint(30, 40, 30),
+    ]
+
+
+    builder._insert_point_at_distance(points, 15)
+    assert [point.distance for point in points] == [10, 15, 20, 30]
+
+    inserted = points[1]
+
+    assert inserted.distance == pytest.approx(15)
+    assert inserted.x == pytest.approx(25)
+    assert inserted.z == pytest.approx(30)
+
+
+def test_insert_point_does_not_duplicate_existing_distance():
+    builder = TrackBuilder(make_track_metadata())
+
+    points = [
+        TrackPoint(10, 20, 50),
+        TrackPoint(20, 30, 10),
+        TrackPoint(30, 40, 30),
+    ]
+
+    builder._insert_point_at_distance(points, 20)
+
+    assert len(points) == 3
+
+    assert [point.distance for point in points] == [10, 20, 30]
+
+
+def test_insert_point_between_final_pair():
+    builder = TrackBuilder(make_track_metadata())
+
+    points = [
+        TrackPoint(10, 20, 50),
+        TrackPoint(20, 30, 10),
+        TrackPoint(30, 40, 30),
+    ]
+
+    builder._insert_point_at_distance(points, 25)
+
+    assert [point.distance for point in points] == [10, 20, 25, 30]
+
+    inserted = points[2]
+
+    assert inserted.distance == pytest.approx(25)
+
+    assert inserted.x == pytest.approx(35)
+    assert inserted.z == pytest.approx(20)

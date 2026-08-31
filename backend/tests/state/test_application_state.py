@@ -179,6 +179,19 @@ def test_session_packet_updates_session_state():
     assert state.track_builder is not None
     assert state.track_builder.track_length == 5891
 
+    metadata = state.track_builder.metadata
+
+    assert metadata.track_id == 7
+    assert metadata.track_length == pytest.approx(5891.0)
+
+    assert metadata.sector_2_start == pytest.approx(2000.0)
+    assert metadata.sector_3_start == pytest.approx(4000.0)
+
+    assert metadata.marshal_zone_starts == pytest.approx((
+        0.10 * 5891,
+        0.40 * 5891,
+    ))
+
 
 def test_event_packet_is_added_to_event_history():
     state = ApplicationState()

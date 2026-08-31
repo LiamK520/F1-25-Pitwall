@@ -22,7 +22,9 @@ from udp.final_classification import FinalClassificationPacket
 from state.history import LapTelemetry, LapTelemetryBuffer
 from state.live import MatchedLiveFrame, FramePackets
 
-from track import TrackBuilder
+from track import TrackBuilder, TrackMetadata
+
+from statistics import median
 
 
 @dataclass
@@ -286,7 +288,17 @@ class ApplicationState:
         self.session = packet
 
         if self.track_builder is None:
-            self.track_builder = TrackBuilder(packet.track_length)
+            metadata = TrackMetadata(
+                track_id=packet.track_id,
+                track_length=packet.track_length,
+                sector_2_start=packet.sector2_lap_distance_start,
+                sector_3_start=packet.sector3_lap_distance_start,
+                # need to convert 0-1 scale to 0-track len
+                marshal_zone_starts=tuple(
+                    zone.zone_start * packet.track_length for zone in packet.marshal_zones
+                )
+            )
+            self.track_builder = TrackBuilder(metadata)
 
     def _update_setups(self, packet: CarSetupPacket) -> None:
         for i, setup in enumerate(packet.car_setup_data):
@@ -341,9 +353,21 @@ class ApplicationState:
             # NOTE: terminal testing for now to see how coverage works out. appears to get to 100% after a single lap which is good
             # tomorrow investiage indiviual bins, bin density etc.
             if frame % 300 == 0:
+                sample_counts = [count for count in self.track_builder.sample_counts() if count > 0]
+
+                car_counts = [count for count in self.track_builder.car_counts() if count > 0]
+
                 print(
                     f"Track samples: {len(self.track_builder.samples)} | "
-                    f"Coverage: {self.track_builder.coverage():.1%}"
+                    f"Coverage: {self.track_builder.coverage():.1%} | "
+                    f"Samples/bin min={min(sample_counts)} "
+                    f"median={median(sample_counts):.1f} | "
+                    f"Cars/bin min={min(car_counts)} "
+                    f"median={median(car_counts):.1f} | "
+                    f"5-car={self.track_builder.car_coverage(5):.1%} | "
+                    f"10-car={self.track_builder.car_coverage(10):.1%} | "
+                    f"15-car={self.track_builder.car_coverage(15):.1%} | "
+                    f"20-car={self.track_builder.car_coverage(20):.1%}"
                 )
 
     
