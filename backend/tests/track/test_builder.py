@@ -36,9 +36,9 @@ def make_track_metadata(track_length: int = TRACK_LENGTH) -> TrackMetadata:
     return TrackMetadata(
         track_id=7,
         track_length=track_length,
-        sector_2_start=2000.0,
-        sector_3_start=4000.0,
-        marshal_zone_starts=(500.0, 2500.0),
+        sector_2_start=track_length * 0.3,
+        sector_3_start=track_length * 0.7,
+        marshal_zone_starts=(track_length * 0.15, track_length * 0.85),
     )
 
 
@@ -456,7 +456,8 @@ def test_finalise_accepts_complete():
     assert geometry.sector_3_start == builder.metadata.sector_3_start
     assert geometry.marshal_zone_starts == builder.metadata.marshal_zone_starts
 
-    assert len(geometry.points) == 100
+    # 100 points + 2 marshal zones and 2 sector
+    assert len(geometry.points) == 104
 
 
 def test_finalise_correct_bounds():
@@ -496,12 +497,37 @@ def test_interpolate_not_midpoint():
     # 400 = 75%
     point3 = builder._interpolate_point(point1, point2, 400)
 
-    assert point3.distance == 400
+    assert point3.distance == pytest.approx(400.0)
     # 320 - 60 = 260 * 0.25 = 65, 60 _ 65 = 125
     assert point3.x == pytest.approx(125)
     # 180 - 80 = 100 * 0.25 = 25, 180 - 25 = 155
     assert point3.z == pytest.approx(155)
 
+
+def test_interpolate_wraparound_before():
+    builder = TrackBuilder(make_track_metadata(100.0))
+
+    point1 = TrackPoint(95, 20, 30)
+    point2 = TrackPoint(5, 40, 0)
+
+    point3 = builder._interpolate_wraparound_point(point1, point2, 0.0)
+
+    assert point3.distance == pytest.approx(0.0)
+    assert point3.x == pytest.approx(30.0)
+    assert point3.z == pytest.approx(15.0)
+
+
+def test_interpolate_wraparound_after():
+    builder = TrackBuilder(make_track_metadata(100.0))
+
+    point1 = TrackPoint(95, 20, 30)
+    point2 = TrackPoint(5, 40, 0)
+
+    point3 = builder._interpolate_wraparound_point(point1, point2, 100.0)
+
+    assert point3.distance == pytest.approx(100.0)
+    assert point3.x == pytest.approx(30.0)
+    assert point3.z == pytest.approx(15.0)
 
 def test_insert_point_between_points():
     builder = TrackBuilder(make_track_metadata())
@@ -558,3 +584,102 @@ def test_insert_point_between_final_pair():
 
     assert inserted.x == pytest.approx(35)
     assert inserted.z == pytest.approx(20)
+
+
+def test_insert_point_before_first():
+    builder = TrackBuilder(make_track_metadata(40.0))
+    
+    points = [
+            TrackPoint(10, 20, 50),
+            TrackPoint(20, 30, 10),
+            TrackPoint(30, 40, 30),
+        ]
+    
+    builder._insert_point_at_distance(points, 0.0)
+
+    assert [point.distance for point in points] == [0, 10, 20, 30]
+
+    inserted = points[0]
+
+    assert inserted.distance == pytest.approx(0.0)
+
+    assert inserted.x == pytest.approx(30.0)
+    assert inserted.z == pytest.approx(40.0)
+
+
+def test_insert_point_after_last():
+    builder = TrackBuilder(make_track_metadata(40.0))
+    
+    points = [
+            TrackPoint(10, 20, 50),
+            TrackPoint(20, 30, 10),
+            TrackPoint(30, 40, 30),
+        ]
+    
+    builder._insert_point_at_distance(points, 35.0)
+
+    assert [point.distance for point in points] == [10, 20, 30, 35]
+
+    inserted = points[-1]
+
+    assert inserted.distance == pytest.approx(35.0)
+
+    assert inserted.x == pytest.approx(35.0)
+    assert inserted.z == pytest.approx(35.0)
+
+
+def test_insert_point_track_length():
+    builder = TrackBuilder(make_track_metadata(40.0))
+    
+    points = [
+            TrackPoint(10, 20, 50),
+            TrackPoint(20, 30, 10),
+            TrackPoint(30, 40, 30),
+        ]
+    
+    builder._insert_point_at_distance(points, 40.0)
+
+    # distance should get set to 0
+    assert [point.distance for point in points] == [0, 10, 20, 30]
+
+    # now at pos 0 because dist set to 0
+    inserted = points[0]
+
+    assert inserted.distance == pytest.approx(0.0)
+
+    assert inserted.x == pytest.approx(30.0)
+    assert inserted.z == pytest.approx(40.0)
+
+def test_finalise_inserts_boundaries():
+    # bins appear every 5m, so sec3, marshal 2 and 3 should all not be in
+    metadata = TrackMetadata(
+        track_id=7,
+        track_length=500,
+        sector_2_start=150.0,
+        sector_3_start=302.0,
+        marshal_zone_starts=(75.0, 224.0, 403.0)
+    )
+
+    builder = TrackBuilder(metadata)
+
+    # add coverage bins
+    add_car_coverage(
+        builder,
+        num_bins=100,
+        num_cars=10,
+    )
+
+    geometry = builder.finalise()
+
+    distances = [point.distance for point in geometry.points]
+
+    for boundary in (75.0, 150.0, 224.0, 302.0, 403.0):
+        # dont need both but just for explicitnes
+        assert boundary in distances
+        assert distances.count(boundary) == 1
+
+    # also check correct x/z
+    # values are not 302.0 due to interpolation of bin values (which are median of bins) and points stored at bin + 1m (e..g 301m)
+    boundary_point = next(point for point in geometry.points if point.distance == 302.0)
+    assert boundary_point.x == pytest.approx(300.5)
+    assert boundary_point.z == pytest.approx(300.5)

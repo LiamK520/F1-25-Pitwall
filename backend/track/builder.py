@@ -181,14 +181,51 @@ class TrackBuilder:
         return TrackPoint(distance, new_x, new_z)
 
 
+    def _interpolate_wraparound_point(self, before: TrackPoint, after:TrackPoint, distance: float) -> TrackPoint:
+        """
+        Creates a trackpoint where before and after crosses the start/finish line
+        """
+
+        # interpolating between final and first point, where distance is before first point distance
+        if distance < before.distance and distance < after.distance:
+            # easiest way to handle this is probably just make before a negative distance
+            new_point = TrackPoint(before.distance - self.track_length, before.x, before.z)
+
+            # now interpolate as normal
+            return self._interpolate_point(new_point, after, distance)
+
+        # interpolating between final and first point, where distance is after final point distance
+        if distance > before.distance and distance > after.distance:
+            new_point = TrackPoint(after.distance + self.track_length, after.x, after.z)
+
+            return self._interpolate_point(before, new_point, distance)
+
+        # something weird with the points is going on if neither case hits
+        raise RuntimeError("Incorrect point setup for a wraparound interpolation")
+
+
     def _insert_point_at_distance(self, points: list[TrackPoint], distance: float) -> None:
         """
         Insert a trackponit at the desired distance in the points list
         """
 
+        # even tho prerace we can have negative distance, raise error anyway
+        # interpolation at negative distance should never happen
+        if distance < 0 or distance > self.track_length:
+            raise ValueError(f"Outside track bounds: attempted to add dist {distance}m on track of length {self.track_length}m")
+
+        # should be same thing. making it 0 avoids having different values for the same idea (star/finish line)
+        if distance == self.track_length:
+            distance = 0
+
         # linear search should be fine but if not come back to this and make it binary search or interpolation serach
-        if distance <= points[0].distance:
-            # maybe do something later but for now no
+       
+        if distance < points[0].distance:
+            point = self._interpolate_wraparound_point(points[-1], points[0], distance)
+            points.insert(0, point)
+            return
+
+        if distance == points[0].distance:
             return
         
         for i in range(1, len(points)):
@@ -201,12 +238,22 @@ class TrackBuilder:
                 points.insert(i, point)
                 return
 
+        if distance == points[-1].distance:
+            return
+
+        # otherwise we must be past final point
+        point = self._interpolate_wraparound_point(points[-1], points[0], distance)
+        points.append(point)
+        return
+
 
     def finalise(self) -> TrackGeometry:
         """
         build the final represnetation of the current track.
 
         must contain enough data to finalise, see ready_to_finalise
+
+        raises `RuntimeError` if ready_to_finalise is false
         """
 
         if not self.ready_to_finalise():
@@ -214,8 +261,18 @@ class TrackBuilder:
 
         built_points = self.build_points()
 
+        boundaries = [self.metadata.sector_2_start, self.metadata.sector_3_start, *self.metadata.marshal_zone_starts]
+
         # every bin contains a point but just to be sure filter
-        points = tuple(point for point in built_points if point is not None)
+        points = [point for point in built_points if point is not None]
+
+        # inserts points at marshall zone and sector starts
+        # this is important as when the frontend renders map, having points at these areas should allow for dynamic highlighting
+        # like yellow flags in martial zones, or just colouring different sectors different colours
+        for dist in boundaries:
+            self._insert_point_at_distance(points, dist)
+
+
 
         min_x = min(point.x for point in points)
         max_x = max(point.x for point in points)
@@ -236,5 +293,5 @@ class TrackBuilder:
 
             marshal_zone_starts=self.metadata.marshal_zone_starts,
 
-            points=points,
+            points=tuple(points),
         )
