@@ -22,7 +22,7 @@ from udp.final_classification import FinalClassificationPacket
 from state.history import LapTelemetry, LapTelemetryBuffer
 from state.live import MatchedLiveFrame, FramePackets
 
-from track import TrackBuilder, TrackMetadata
+from track import TrackBuilder, TrackMetadata, TrackGeometry
 
 from statistics import median
 
@@ -101,6 +101,7 @@ class ApplicationState:
     latest_motion: MotionPacket | None = None
 
     track_builder: TrackBuilder | None = None
+    track_geometry: TrackGeometry | None = None
 
     # consts
     _MAX_FRAME_AGE = 10
@@ -140,6 +141,7 @@ class ApplicationState:
         self.latest_motion = None
 
         self.track_builder = None
+        self.track_geometry = None
 
     def update(self, packet) -> None:
         """
@@ -287,18 +289,25 @@ class ApplicationState:
     def _update_session(self, packet: SessionPacket) -> None:
         self.session = packet
 
-        if self.track_builder is None:
-            metadata = TrackMetadata(
-                track_id=packet.track_id,
-                track_length=packet.track_length,
-                sector_2_start=packet.sector2_lap_distance_start,
-                sector_3_start=packet.sector3_lap_distance_start,
-                # need to convert 0-1 scale to 0-track len
-                marshal_zone_starts=tuple(
-                    zone.zone_start * packet.track_length for zone in packet.marshal_zones
-                )
+        # moved metadata out of if as marshal zones were getting set to 0 on first packet and never updated
+        metadata = TrackMetadata(
+            track_id=packet.track_id,
+            track_length=packet.track_length,
+            sector_2_start=packet.sector2_lap_distance_start,
+            sector_3_start=packet.sector3_lap_distance_start,
+            # need to convert 0-1 scale to 0-track len
+            marshal_zone_starts=tuple(
+                zone.zone_start * packet.track_length for zone in packet.marshal_zones
             )
+        )
+
+        if self.track_builder is None:
             self.track_builder = TrackBuilder(metadata)
+
+        elif self.track_geometry is None:
+            self.track_builder.metadata = metadata
+            # probably wont change but for consistency
+            self.track_builder.track_length = metadata.track_length
 
     def _update_setups(self, packet: CarSetupPacket) -> None:
         for i, setup in enumerate(packet.car_setup_data):
@@ -345,8 +354,16 @@ class ApplicationState:
 
         # track stuff
 
+        # if we've finished dont keep feeding more data
+        if self.track_geometry is not None:
+            return
+
         if self.track_builder is not None and frame_packets.lap_data is not None and frame_packets.motion is not None and not frame_packets.track_processed:
             self.track_builder.process_frame(frame_packets.lap_data, frame_packets.motion)
+
+            if self.track_builder.ready_to_finalise():
+                # finalise track
+                self.track_geometry = self.track_builder.finalise()
 
             frame_packets.track_processed = True
 

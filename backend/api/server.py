@@ -1,12 +1,12 @@
 from contextlib import asynccontextmanager
 import threading
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 
 from udp.receiver import run_receiver
 from state.application_state import ApplicationState
-from api.schemas import StateResponse
-from api.serialiser import serialise_live_frame, serialise_state, serialise_session_update, serialise_motion_frame
+from api.schemas import StateResponse, TrackGeometryResponse, TrackReadyResponse
+from api.serialiser import serialise_live_frame, serialise_state, serialise_session_update, serialise_motion_frame, serialise_track_geometry
 
 import asyncio
 
@@ -39,6 +39,15 @@ def get_state():
     return serialise_state(state)
 
 
+@app.get("/track", response_model=TrackGeometryResponse)
+def get_track():
+    geometry = state.track_geometry
+
+    if geometry is None:
+        raise HTTPException(status_code=404, detail="Track geometry is not ready yet")
+
+    return serialise_track_geometry(geometry)
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
@@ -46,6 +55,7 @@ async def websocket_endpoint(websocket: WebSocket):
     last_live_sent: tuple[int, int] | None = None
     last_session_sent: tuple[int, int, int, int, int] | None = None
     last_motion_sent: tuple[int, int] | None = None
+    last_track_ready_sent: tuple[int, int] | None = None
 
     try:
         while True:
@@ -91,6 +101,19 @@ async def websocket_endpoint(websocket: WebSocket):
                     await websocket.send_json(response.model_dump())
 
                     last_session_sent = session_key
+
+            geometry = state.track_geometry
+
+            if geometry is not None and state.session_uid is not None:#
+                # using key instead of bool just to be safe in case of weird session or track changes
+                track_key = (state.session_uid, geometry.track_id)
+
+                if track_key != last_track_ready_sent:
+                    response = TrackReadyResponse(state.session_uid, geometry.track_id)
+
+                    await websocket.send_json(response.model_dump())
+
+                    last_track_ready_sent = track_key
 
             # send at approx 20hz
             await asyncio.sleep(0.05)

@@ -1,3 +1,4 @@
+import math
 import struct
 
 import numpy as np
@@ -5,6 +6,7 @@ import pytest
 from dataclasses import replace
 from types import SimpleNamespace
 
+from track.builder import TrackSample
 from state.application_state import ApplicationState, CarState
 from state.history import LapTelemetryBuffer
 
@@ -20,6 +22,8 @@ from tests.udp.test_final_classification import make_final_classification_packet
 from tests.udp.test_lap_data import make_lap_data_packet
 from tests.udp.test_car_telemetry import make_car_telemetry_packet
 from tests.udp.test_motion import make_car_motion
+
+from tests.track.test_builder import add_car_coverage
 
 from udp.car_damage import CarDamagePacket
 from udp.constants import NUM_CARS
@@ -102,6 +106,7 @@ def test_application_state_initialises_car_slots():
     assert state.final_classification is None
     assert state.next_front_wing_value is None
     assert state.track_builder is None
+    assert state.track_geometry is None
 
 
 def test_damage_packet_updates_correct_cars():
@@ -456,6 +461,7 @@ def test_reset_clears_application_state():
     assert state.next_front_wing_value is None
     assert state.latest_live_frame is None
     assert state.track_builder is None
+    assert state.track_geometry is None
 #
 # frame alignment tests
 #
@@ -1511,3 +1517,97 @@ def test_track_frame_is_only_processed_once():
     assert len(state.track_builder.samples) == NUM_CARS
 
     assert state._frame_buffer[100].track_processed is True
+
+
+def test_track_builder_finalises():
+    state = ApplicationState()
+
+    state.update(SessionPacket.from_bytes(make_session_packet()))
+
+    assert state.track_builder is not None
+    assert state.track_geometry is None
+
+    builder = state.track_builder
+
+    # fiall bins
+    # same logic as
+    num_bins = math.ceil(builder.track_length / builder.BIN_SIZE)
+
+    add_car_coverage(builder, num_bins, num_cars=builder.MIN_FINALISE_CARS)
+
+    assert builder.ready_to_finalise()
+
+    # process matched track frame to trigger try_process_frame
+    state.update(make_state_lap_packet(frame=100))
+    state.update(make_state_motion_packet(frame=100))
+
+    assert state.track_geometry is not None
+
+    assert state.track_geometry.track_id == builder.metadata.track_id
+    assert state.track_geometry.track_length == builder.metadata.track_length
+
+
+def test_track_builder_stops_after_finalise():
+    state = ApplicationState()
+
+    state.update(SessionPacket.from_bytes(make_session_packet()))
+
+    assert state.track_builder is not None
+
+    builder = state.track_builder
+
+    num_bins = math.ceil(builder.track_length / builder.BIN_SIZE)
+
+    add_car_coverage(builder, num_bins=num_bins, num_cars=builder.MIN_FINALISE_CARS)
+
+    # finalsie
+    state.update(make_state_lap_packet(frame=100))
+    state.update(make_state_motion_packet(frame=100))
+
+    assert state.track_geometry is not None
+
+    sample_count = len(builder.samples)
+
+    # another matched frame
+    state.update(make_state_lap_packet(frame=101))
+    state.update(make_state_motion_packet(frame=101))
+
+    # should not impact samples
+    assert len(builder.samples) == sample_count
+
+
+def test_session_updates_track_builder_metadata():
+    """
+    This tests that each session packet updates metadata.
+
+    Added this test because F1 25 seems to send initial session packets with 0 marshall zones, but all subsequent ones have x amount,
+    leading to the track builder storing an incorrect marshal zone tuple
+    """
+
+    state = ApplicationState()
+
+    # existing helper contains 2 marshal zones at 0.10 and 0.40
+    packet_with_zones = SessionPacket.from_bytes(make_session_packet())
+
+    # remove them to test early packet without zones
+    packet_without_zones = replace(packet_with_zones, num_marshal_zones=0, marshal_zones=())
+
+    state.update(packet_without_zones)
+
+    assert state.track_builder is not None
+
+    builder = state.track_builder
+
+    assert builder.metadata.marshal_zone_starts == ()
+
+    # later packet that has zones
+    state.update(packet_with_zones)
+
+    # make sure our builder is still our builder and not a phony
+    assert state.track_builder is builder
+
+    # and finally we make sure that there is the zones again
+    assert builder.metadata.marshal_zone_starts == pytest.approx((
+        0.10 * packet_with_zones.track_length,
+        0.40 * packet_with_zones.track_length,
+    ))

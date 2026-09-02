@@ -208,3 +208,32 @@ class MotionFrameResponse(BaseModel):
     session_time: float
 
     cars: list[MotionCarResponse]
+
+
+class TrackPointResponse(BaseModel):
+    distance: float
+    x: float
+    z: float
+
+
+class TrackGeometryResponse(BaseModel):
+    track_id: int
+    track_length: int
+
+    min_x: float
+    max_x: float
+    min_z: float
+    max_z: float
+
+    sector_2_start: float
+    sector_3_start: float
+    marshal_zone_starts: tuple[float, ...]
+
+    points: list[TrackPointResponse]
+
+
+class TrackReadyResponse(BaseModel):
+    type: Literal["track_ready"] = "track_ready"
+
+    session_uid: int
+    track_id: int

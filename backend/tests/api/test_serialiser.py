@@ -1,11 +1,13 @@
 from types import SimpleNamespace
 
-from api.schemas import CarStateResponse, StateResponse, SessionUpdateResponse, MotionFrameResponse
+from api.schemas import CarStateResponse, StateResponse, SessionUpdateResponse, MotionFrameResponse, TrackGeometryResponse
 from api.serialiser import serialise_car, serialise_live_car, serialise_live_frame, serialise_state, serialise_session_update, \
-serialise_motion_car, serialise_motion_frame
+serialise_motion_car, serialise_motion_frame, serialise_track_geometry
 from state.application_state import ApplicationState, CarState
 from udp.constants import NUM_CARS
 from state.live import MatchedLiveFrame
+
+from track import TrackGeometry, TrackPoint
 
 def test_serialise_empty_state():
     """
@@ -435,3 +437,42 @@ def test_serialise_motion_frame():
     assert response.cars[1].x == 130.0
     assert response.cars[1].z == -315.0
     assert response.cars[1].yaw == 1.6
+
+
+def test_serialise_track_geometry():
+    geometry = TrackGeometry(
+        track_id=4,
+        track_length=100,
+        min_x=-10,
+        max_x=40,
+        min_z=0,
+        max_z=40,
+        sector_2_start=25,
+        sector_3_start=75,
+        marshal_zone_starts=(0, 25, 50, 75),
+
+        points = [TrackPoint(0, 0, 0), TrackPoint(50, 40, 40)]
+    )
+
+    response = serialise_track_geometry(geometry)
+
+    assert response.track_id == 4
+    assert response.track_length == 100
+    assert response.min_x == -10
+    assert response.max_x == 40
+    assert response.min_z == 0
+    assert response.max_z == 40
+    assert response.sector_2_start == 25
+    assert response.sector_3_start == 75
+    assert response.marshal_zone_starts == (0, 25, 50, 75)
+
+    # only 2 as not called finalise to add mroe
+    assert len(response.points) == 2
+
+    assert response.points[0].distance == 0
+    assert response.points[0].x == 0
+    assert response.points[0].z == 0
+
+    assert response.points[1].distance == 50
+    assert response.points[1].x == 40
+    assert response.points[1].z == 40

@@ -457,7 +457,7 @@ def test_finalise_accepts_complete():
     assert geometry.marshal_zone_starts == builder.metadata.marshal_zone_starts
 
     # 100 points + 2 marshal zones and 2 sector
-    assert len(geometry.points) == 104
+    assert len(geometry.points) == 105
 
 
 def test_finalise_correct_bounds():

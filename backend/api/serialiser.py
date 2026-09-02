@@ -5,6 +5,7 @@ from udp.car_telemetry import CarTelemetryData
 from udp.lap_data import LapData
 from udp.session import SessionPacket
 from udp.motion import MotionPacket, CarMotionData
+from track import TrackGeometry
 
 from state.enums import enum_label, TrackId, SessionType, Weather, SafetyCarStatus
 
@@ -297,4 +298,29 @@ def serialise_motion_frame(packet: MotionPacket) -> MotionFrameResponse:
         overall_frame=header.overall_frame_identifier,
         session_time=header.session_time,
         cars=cars
+    )
+
+
+def serialise_track_geometry(geometry: TrackGeometry) -> TrackGeometryResponse:
+    return TrackGeometryResponse(
+        track_id=geometry.track_id,
+        track_length=geometry.track_length,
+
+        min_x=geometry.min_x,
+        max_x=geometry.max_x,
+        min_z=geometry.min_z,
+        max_z=geometry.max_z,
+
+        sector_2_start=geometry.sector_2_start,
+        sector_3_start=geometry.sector_3_start,
+        marshal_zone_starts=geometry.marshal_zone_starts,
+
+        points=[
+            TrackPointResponse(
+                distance=point.distance,
+                x=point.x,
+                z=point.z,
+            )
+            for point in geometry.points
+        ]
     )

@@ -261,7 +261,7 @@ class TrackBuilder:
 
         built_points = self.build_points()
 
-        boundaries = [self.metadata.sector_2_start, self.metadata.sector_3_start, *self.metadata.marshal_zone_starts]
+        boundaries = [0.0, self.metadata.sector_2_start, self.metadata.sector_3_start, *self.metadata.marshal_zone_starts]
 
         # every bin contains a point but just to be sure filter
         points = [point for point in built_points if point is not None]
