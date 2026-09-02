@@ -109,7 +109,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 track_key = (state.session_uid, geometry.track_id)
 
                 if track_key != last_track_ready_sent:
-                    response = TrackReadyResponse(state.session_uid, geometry.track_id)
+                    response = TrackReadyResponse(session_uid=state.session_uid, track_id=geometry.track_id)
 
                     await websocket.send_json(response.model_dump())
 

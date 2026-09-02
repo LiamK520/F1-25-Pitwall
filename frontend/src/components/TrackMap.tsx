@@ -1,7 +1,7 @@
 import {useEffect, useRef, useState} from "react"
 
 import type {RefObject} from "react"
-import type {MotionFrame, LiveFrame} from "../types/api"
+import type {MotionFrame, LiveFrame, TrackGeometry} from "../types/api"
 
 // ms
 const REFRESH_RATE = 50
@@ -12,9 +12,10 @@ const MAP_PADDING = 50
 interface TrackMapProps {
     latestMotionRef: RefObject<MotionFrame | null>
     latestFrameRef: RefObject<LiveFrame | null>
+    geometry: TrackGeometry | null
 }
 
-function TrackMap({latestMotionRef, latestFrameRef}: TrackMapProps) {
+function TrackMap({latestMotionRef, latestFrameRef, geometry}: TrackMapProps) {
     const [frame, setFrame] = useState<MotionFrame | null>(null)
 
     // bounds for max and min x and z so far
@@ -71,7 +72,12 @@ function TrackMap({latestMotionRef, latestFrameRef}: TrackMapProps) {
         }
     }, [latestMotionRef])
 
-    const bounds = boundsRef.current
+    const bounds = geometry ? {
+        minX: geometry.min_x,
+        maxX: geometry.max_x,
+        minZ: geometry.min_z,
+        maxZ: geometry.max_z
+    } : boundsRef.current
     const worldWidth = bounds.maxX - bounds.minX
     const worldHeight = bounds.maxZ - bounds.minZ
 
@@ -84,6 +90,18 @@ function TrackMap({latestMotionRef, latestFrameRef}: TrackMapProps) {
     const worldCentreX = (bounds.minX + bounds.maxX) / 2
 
     const worldCentreZ = (bounds.minZ + bounds.maxZ) / 2
+
+    function toMapPoint(x: number, z: number) {
+        return {
+            x: MAP_WIDTH / 2 + (x - worldCentreX) * scale,
+            y: MAP_HEIGHT / 2 + (z - worldCentreZ) * scale
+        }
+    }
+
+    const trackPoints = geometry ? [...geometry.points, geometry.points[0]].map((point) => {
+        const mapped = toMapPoint(point.x, point.z)
+        return `${mapped.x},${mapped.y}`
+    }).join(" ") : ""
 
     // TODO: tidy up to use this calc once only
     const liveFrame = latestFrameRef.current
@@ -105,17 +123,27 @@ function TrackMap({latestMotionRef, latestFrameRef}: TrackMapProps) {
                     width="100%"
                     height="100%">  
 
+                    {geometry && trackPoints && (
+                        <polyline
+                            points={trackPoints}
+                            fill="none"
+                            stroke="white"
+                            strokeWidth="4"
+                            strokeLinejoin="round"
+                            strokeLinecap="round"
+                        />
+                    )}
+
                     {frame !== null && worldWidth > 0 && worldHeight > 0 && (
                         frame.cars.filter((car) => activeCars.has(car.index)).
                         map((car) => {
-                            const carX = MAP_WIDTH / 2 + (car.x - worldCentreX) * scale
-                            const carY = MAP_HEIGHT / 2 + (car.z - worldCentreZ) * scale
+                            const point = toMapPoint(car.x, car.z)
 
                             return (
                                 <circle
                                     key={car.index}
-                                    cx={carX}
-                                    cy={carY}
+                                    cx={point.x}
+                                    cy={point.y}
                                     r="6"
                                     fill="white"
                                 />

@@ -164,3 +164,32 @@ export interface MotionFrame {
 
     cars: MotionCar[]
 }
+
+export interface TrackPoint {
+    distance: number
+    x: number
+    z: number
+}
+
+export interface TrackGeometry {
+    track_id: number
+    track_length: number
+
+    min_x: number
+    max_x: number
+    min_z : number
+    max_z: number
+
+    sector_2_start: number
+    sector_3_start: number
+
+    marshal_zone_starts: number[]
+    points: TrackPoint[]
+}
+
+export interface TrackReady {
+    type: "track_ready"
+
+    session_uid: number
+    track_id: number
+}

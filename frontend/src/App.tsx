@@ -4,7 +4,8 @@ import type {
   LiveFrame,
   StateResponse,
   SessionUpdate,
-  MotionFrame
+  MotionFrame,
+  TrackGeometry
 } from "./types/api"
 
 import TimingTower from "./components/TimingTower"
@@ -26,6 +27,8 @@ function App() {
   const latestMotionRef = useRef<MotionFrame | null>(null)
   const [timingFrame, setTimingFrame] = useState<LiveFrame | null>(null)
 
+  const [trackGeometry, setTrackGeometry] = useState<TrackGeometry | null>(null)
+
   const [wsConnected, setWsConnected] = useState(false)
 
   const [selectedCarIndex, setSelectedCarIndex] = useState<number | null>(null)
@@ -40,9 +43,26 @@ function App() {
     setState(data)
   }
 
+  async function loadTrack() {
+    const response = await fetch("/track")
+
+    // not ready
+    if (response.status === 404) {
+      return
+    }
+
+    if (!response.ok) {
+      throw new Error(`Failed to load track: ${response.status}`)
+    }
+
+    const data: TrackGeometry = await response.json()
+    setTrackGeometry(data)
+  }
+
   // init state
   useEffect(() => {
     loadState()
+    loadTrack()
   }, [])
 
   // if state not up to date load it again
@@ -105,6 +125,10 @@ function App() {
           }
         })
       }
+
+      else if (data.type == "track_ready") {
+        loadTrack()
+      }
     }
 
     socket.onclose = () => {
@@ -155,7 +179,7 @@ function App() {
             )}
           </aside>
 
-          <TrackMap latestMotionRef={latestMotionRef} latestFrameRef={latestFrameRef}/>
+          <TrackMap latestMotionRef={latestMotionRef} latestFrameRef={latestFrameRef} geometry={trackGeometry}/>
 
           <ComparisonArea />
         </div>
@@ -185,7 +209,7 @@ function App() {
   return (
     <div className="app-shell">
         <h1 className="app-title">
-            F1 25 Pit Wall
+            F1 25 Pit Wall - Track Geometry: {trackGeometry ? `${trackGeometry.points.length} points` : "Waiting"}
         </h1>
 
         <main className="app">
