@@ -683,3 +683,41 @@ def test_finalise_inserts_boundaries():
     boundary_point = next(point for point in geometry.points if point.distance == 302.0)
     assert boundary_point.x == pytest.approx(300.5)
     assert boundary_point.z == pytest.approx(300.5)
+
+
+# encountered a problem where the starting grid on track map is zigzagged.
+# this is very likely due to cars sending possibly hundreds of motion packets whilst stationary at the light sequence
+# so best fix is likely to just treat all cars that pass through a bin equally
+# this test is designed for that
+def test_build_points_weights_cars_equally():
+    builder = TrackBuilder(make_track_metadata(100))
+
+    # car 0 sits stationary off the normal line for a long time
+    for _ in range(100):
+        builder.samples.append(
+            TrackSample(
+                car_index=0,
+                lap_number=1,
+                lap_distance=12.0,
+                x=10.0,
+                z=5.0,
+            )
+        )
+
+    # 10 other cars drive through near the normal line
+    for car_index in range(1, 11):
+        builder.samples.append(
+            TrackSample(
+                car_index=car_index,
+                lap_number=1,
+                lap_distance=12.0,
+                x=10.0,
+                z=0.0,
+            )
+        )
+
+    point = builder.build_points()[2]
+
+    assert point is not None
+    assert point.x == pytest.approx(10.0)
+    assert point.z == pytest.approx(0.0)

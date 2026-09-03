@@ -90,6 +90,37 @@ class TrackBuilder:
 
         return bins
 
+    def _get_median_of_bin(self, samples: list[TrackSample]) -> tuple[float, float]:
+        """
+        Returns the weighted median value for the passed bin of samples
+
+        The weighted median is calculated by calculating the median of each car's values in the bin, and
+        then taking the median of those values for each car.
+        """
+        car_samples = [[] for _ in range(NUM_CARS)]
+
+        # group by index
+        for i in range(len(samples)):
+            sample = samples[i]
+            car_samples[sample.car_index].append(sample)
+
+        car_samples_median_x = []
+        car_samples_median_z = []
+
+        # now get median of all and omint none
+        for i in range(len(car_samples)):
+            car_sample = car_samples[i]
+            if not car_sample:
+                continue
+
+            car_samples_median_x.append(median([sample.x for sample in car_sample]))
+            car_samples_median_z.append(median([sample.z for sample in car_sample]))
+
+        # finally return median points
+
+        return (median(car_samples_median_x), median(car_samples_median_z))
+
+
     def build_points(self) -> list[TrackPoint | None]:
         """
         Returns a list of TrackPoints from the current recorded samples.
@@ -108,8 +139,7 @@ class TrackBuilder:
             dist = min(i * self.BIN_SIZE + self.BIN_SIZE / 2, self.track_length)
             # get median for rest
             # median should hopefully be good enough to get rid of outliers (e.g. runoffs) see sure
-            x = median([sample.x for sample in bins[i]])
-            z = median([sample.z for sample in bins[i]])
+            x, z = self._get_median_of_bin(bins[i])
 
             point = TrackPoint(dist, x, z)
             points[i] = point
