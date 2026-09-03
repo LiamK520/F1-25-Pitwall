@@ -98,10 +98,45 @@ function TrackMap({latestMotionRef, latestFrameRef, geometry}: TrackMapProps) {
         }
     }
 
-    const trackPoints = geometry ? [...geometry.points, geometry.points[0]].map((point) => {
-        const mapped = toMapPoint(point.x, point.z)
-        return `${mapped.x},${mapped.y}`
-    }).join(" ") : ""
+    function pointsToSvg(points: TrackGeometry["points"]) {
+        return points.map((point) => {
+            const mapped = toMapPoint(point.x, point.z)
+
+            return `${mapped.x},${mapped.y}`
+        }).join(" ")
+    }
+
+    // separate points into sectors
+    const sector1 = geometry
+        ? geometry.points.filter((point) =>
+            point.distance >= 0 &&
+            point.distance <= geometry.sector_2_start
+        )
+        : []
+
+    const sector2 = geometry
+        ? geometry.points.filter((point) =>
+            point.distance >= geometry.sector_2_start &&
+            point.distance <= geometry.sector_3_start
+        )
+        : []
+
+    const sector3 = geometry
+        ? geometry.points.filter((point) =>
+            point.distance >= geometry.sector_3_start
+        )
+        : []
+
+    // get as svg point
+    const sector1Points = pointsToSvg(sector1)
+    const sector2Points = pointsToSvg(sector2)
+
+    const sector3Points = geometry && sector3.length > 0
+        ? pointsToSvg([
+            ...sector3,
+            geometry.points[0]
+        ])
+        : ""
 
     // TODO: tidy up to use this calc once only
     const liveFrame = latestFrameRef.current
@@ -123,15 +158,35 @@ function TrackMap({latestMotionRef, latestFrameRef, geometry}: TrackMapProps) {
                     width="100%"
                     height="100%">  
 
-                    {geometry && trackPoints && (
-                        <polyline
-                            points={trackPoints}
-                            fill="none"
-                            stroke="white"
-                            strokeWidth="4"
-                            strokeLinejoin="round"
-                            strokeLinecap="round"
-                        />
+                    {geometry && (
+                        <>
+                            <polyline
+                                points={sector1Points}
+                                fill="none"
+                                stroke="#e10600"
+                                strokeWidth="4"
+                                strokeLinejoin="round"
+                                strokeLinecap="round"
+                            />
+
+                            <polyline
+                                points={sector2Points}
+                                fill="none"
+                                stroke="#ffd500"
+                                strokeWidth="4"
+                                strokeLinejoin="round"
+                                strokeLinecap="round"
+                            />
+
+                            <polyline
+                                points={sector3Points}
+                                fill="none"
+                                stroke="#00a8ff"
+                                strokeWidth="4"
+                                strokeLinejoin="round"
+                                strokeLinecap="round"
+                            />
+                        </>
                     )}
 
                     {frame !== null && worldWidth > 0 && worldHeight > 0 && (
