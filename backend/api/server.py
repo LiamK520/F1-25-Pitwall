@@ -5,8 +5,8 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 
 from udp.receiver import run_receiver
 from state.application_state import ApplicationState
-from api.schemas import StateResponse, TrackGeometryResponse, TrackReadyResponse
-from api.serialiser import serialise_live_frame, serialise_state, serialise_session_update, serialise_motion_frame, serialise_track_geometry
+from api.schemas import StateResponse, TrackGeometryResponse, TrackReadyResponse, LapTelemetryResponse, AvailableLapsResponse
+from api.serialiser import serialise_live_frame, serialise_state, serialise_session_update, serialise_motion_frame, serialise_track_geometry, serialise_lap_telemetry, serialise_available_laps
 
 import asyncio
 
@@ -47,6 +47,31 @@ def get_track():
         raise HTTPException(status_code=404, detail="Track geometry is not ready yet")
 
     return serialise_track_geometry(geometry)
+
+
+@app.get("/analysis/cars/{car_index}/laps/{lap_number}", response_model=LapTelemetryResponse)
+def get_lap_telemetry(car_index: int, lap_number: int):
+    if car_index < 0 or car_index >= len(state.cars):
+        raise HTTPException(status_code=404, detail=f"Car {car_index} not found.")
+
+    car = state.cars[car_index]
+
+    telemetry = car.completed_lap_telemetry.get(lap_number)
+
+    if telemetry is None:
+        raise HTTPException(status_code=404, detail=f"Telemetry for lap {lap_number} not found")
+
+    return serialise_lap_telemetry(car_index, telemetry)
+
+
+@app.get("/analysis/cars/{car_index}/laps", response_model=AvailableLapsResponse)
+def get_available_laps(car_index: int):
+    if car_index < 0 or car_index >= len(state.cars):
+        raise HTTPException(status_code=404, detail=f"Car {car_index} not found.")
+
+    car = state.cars[car_index]
+
+    return serialise_available_laps(car)
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

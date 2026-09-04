@@ -12,8 +12,6 @@ class LapTelemetryBuffer:
     """
 
     lap_number: int
-    # used to check if a lap is fully complete. true if lap was started after a transition e.g. 3->4
-    started_at_lap_boundary: bool = False
 
     session_time: list[float] = field(default_factory=list)
     lap_distance: list[float] = field(default_factory=list)
@@ -163,8 +161,7 @@ class LapTelemetry:
 
         This should mainly be used for handling flashbacks that cross a lap.
         """
-        # can always assume started at boundary as shouldn't be in a completed lap telem otherwise
-        buffer = LapTelemetryBuffer(self.lap_number, started_at_lap_boundary=True)
+        buffer = LapTelemetryBuffer(self.lap_number)
 
         buffer.session_time = self.session_time.tolist()
         buffer.lap_distance = self.lap_distance.tolist()

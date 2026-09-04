@@ -8,6 +8,7 @@ from udp.motion import MotionPacket, CarMotionData
 from track import TrackGeometry
 
 from state.enums import enum_label, TrackId, SessionType, Weather, SafetyCarStatus
+from state.history import LapTelemetry
 
 # using custom serailiser to deal with nested structsures like car.participant.etc
 def serialise_car(car: CarState) -> CarStateResponse:
@@ -324,3 +325,30 @@ def serialise_track_geometry(geometry: TrackGeometry) -> TrackGeometryResponse:
             for point in geometry.points
         ]
     )
+
+
+def serialise_lap_telemetry(car_index: int, telemetry: LapTelemetry) -> LapTelemetryResponse:
+    #convert np arrs into lists so they can be easily serialised into json
+    return LapTelemetryResponse(
+        car_index=car_index,
+        lap_number=telemetry.lap_number,
+
+        session_time=telemetry.session_time.tolist(),
+        lap_distance=telemetry.lap_distance.tolist(),
+
+        speed=telemetry.speed.tolist(),
+        throttle=telemetry.throttle.tolist(),
+        brake=telemetry.brake.tolist(),
+        steer=telemetry.steer.tolist(),
+
+        gear=telemetry.gear.tolist(),
+        rpm=telemetry.engine_rpm.tolist(),
+
+        drs=telemetry.drs.tolist()   
+    )
+
+
+def serialise_available_laps(car: CarState) -> AvailableLapsResponse:
+    laps = sorted(car.completed_lap_telemetry.keys())
+
+    return AvailableLapsResponse(car_index=car.index, laps=laps)

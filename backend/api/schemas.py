@@ -237,3 +237,30 @@ class TrackReadyResponse(BaseModel):
 
     session_uid: int
     track_id: int
+
+
+class LapTelemetryResponse(BaseModel):
+    """
+    telemetry samples for one lap for one car
+    """
+
+    car_index: int
+    lap_number: int
+
+    session_time: list[float]
+    lap_distance: list[float]
+
+    speed: list[int]
+    throttle: list[float]
+    brake: list[float]
+    steer: list[float]
+
+    gear: list[int]
+    rpm: list[int]
+
+    drs: list[bool]
+
+
+class AvailableLapsResponse(BaseModel):
+    car_index: int
+    laps: list[int]

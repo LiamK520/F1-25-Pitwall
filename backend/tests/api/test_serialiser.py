@@ -1,8 +1,10 @@
 from types import SimpleNamespace
 
+import numpy as np
+import pytest
+
 from api.schemas import CarStateResponse, StateResponse, SessionUpdateResponse, MotionFrameResponse, TrackGeometryResponse
-from api.serialiser import serialise_car, serialise_live_car, serialise_live_frame, serialise_state, serialise_session_update, \
-serialise_motion_car, serialise_motion_frame, serialise_track_geometry
+from api.serialiser import *
 from state.application_state import ApplicationState, CarState
 from udp.constants import NUM_CARS
 from state.live import MatchedLiveFrame
@@ -476,3 +478,103 @@ def test_serialise_track_geometry():
     assert response.points[1].distance == 50
     assert response.points[1].x == 40
     assert response.points[1].z == 40
+
+
+def test_serialise_lap_telemetry():
+    telemetry = LapTelemetry(
+        lap_number=4,
+
+        session_time=np.array([10.0, 10.1], dtype=np.float32),
+        lap_distance=np.array([100.0, 125.0], dtype=np.float32),
+
+        speed=np.array([220, 230], dtype=np.uint16),
+        throttle=np.array([0.8, 1.0], dtype=np.float32),
+        brake=np.array([0.2, 0.0], dtype=np.float32),
+        steer=np.array([-0.1, 0.05], dtype=np.float32),
+
+        gear=np.array([5, 6], dtype=np.int8),
+        engine_rpm=np.array([10500, 11200], dtype=np.uint16),
+
+        drs=np.array([False, True], dtype=np.bool_),
+    )
+
+    response = serialise_lap_telemetry(
+        car_index=7,
+        telemetry=telemetry,
+    )
+
+    assert response.car_index == 7
+    assert response.lap_number == 4
+
+    assert response.session_time == pytest.approx([10.0, 10.1])
+    assert response.lap_distance == pytest.approx([100.0, 125.0])
+
+    assert response.speed == [220, 230]
+    assert response.throttle == pytest.approx([0.8, 1.0])
+    assert response.brake == pytest.approx([0.2, 0.0])
+    assert response.steer == pytest.approx([-0.1, 0.05])
+
+    assert response.gear == [5, 6]
+    assert response.rpm == [10500, 11200]
+
+    assert response.drs == [False, True]
+
+
+def test_serialise_available_laps():
+    car = CarState(4)
+
+    car.completed_lap_telemetry[1] = LapTelemetry(
+        lap_number=1,
+
+        session_time=np.array([10.0, 10.1], dtype=np.float32),
+        lap_distance=np.array([100.0, 125.0], dtype=np.float32),
+
+        speed=np.array([220, 230], dtype=np.uint16),
+        throttle=np.array([0.8, 1.0], dtype=np.float32),
+        brake=np.array([0.2, 0.0], dtype=np.float32),
+        steer=np.array([-0.1, 0.05], dtype=np.float32),
+
+        gear=np.array([5, 6], dtype=np.int8),
+        engine_rpm=np.array([10500, 11200], dtype=np.uint16),
+
+        drs=np.array([False, True], dtype=np.bool_),
+    )
+
+    car.completed_lap_telemetry[2] = LapTelemetry(
+        lap_number=2,
+
+        session_time=np.array([10.0, 10.1], dtype=np.float32),
+        lap_distance=np.array([100.0, 125.0], dtype=np.float32),
+
+        speed=np.array([220, 230], dtype=np.uint16),
+        throttle=np.array([0.8, 1.0], dtype=np.float32),
+        brake=np.array([0.2, 0.0], dtype=np.float32),
+        steer=np.array([-0.1, 0.05], dtype=np.float32),
+
+        gear=np.array([5, 6], dtype=np.int8),
+        engine_rpm=np.array([10500, 11200], dtype=np.uint16),
+
+        drs=np.array([False, True], dtype=np.bool_),
+    )
+
+    car.completed_lap_telemetry[4] = LapTelemetry(
+        lap_number=4,
+
+        session_time=np.array([10.0, 10.1], dtype=np.float32),
+        lap_distance=np.array([100.0, 125.0], dtype=np.float32),
+
+        speed=np.array([220, 230], dtype=np.uint16),
+        throttle=np.array([0.8, 1.0], dtype=np.float32),
+        brake=np.array([0.2, 0.0], dtype=np.float32),
+        steer=np.array([-0.1, 0.05], dtype=np.float32),
+
+        gear=np.array([5, 6], dtype=np.int8),
+        engine_rpm=np.array([10500, 11200], dtype=np.uint16),
+
+        drs=np.array([False, True], dtype=np.bool_),
+    )
+
+    response = serialise_available_laps(car)
+
+    assert response.car_index == 4
+    assert response.laps == [1, 2, 4]
