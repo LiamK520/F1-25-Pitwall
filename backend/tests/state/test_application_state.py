@@ -586,8 +586,8 @@ def test_frame_alignment_lap_telemetry_records_sample():
 
     car = state.cars[0]
 
-    assert car.current_lap_telemetry is not None
-    assert len(car.current_lap_telemetry.lap_distance) == 0
+    # unmacthec packet will not affect history
+    assert car.current_lap_telemetry is None
 
     # now telem arrives
     state.update(telemetry_packet)
@@ -678,8 +678,7 @@ def test_different_frames_dont_record():
     car = state.cars[0]
 
     # make sure car has no record of telem
-    assert car.current_lap_telemetry is not None
-    assert len(car.current_lap_telemetry.lap_distance) == 0
+    assert car.current_lap_telemetry is None
 
 
 def test_frame_alignment_uses_matched_data():
@@ -773,7 +772,7 @@ def test_old_frames_removed():
 def test_lap_change_completes_buffer():
     state = ApplicationState()
 
-    # matched samples on lap 1
+    # first observed lap is not trusted as complete
     lap_packet_1 = make_state_lap_packet(100, 1, 5000.0)
     telemetry_packet_1 = make_state_telemetry_packet(100, 250)
 
@@ -784,31 +783,174 @@ def test_lap_change_completes_buffer():
 
     assert car.current_lap_telemetry is not None
     assert car.current_lap_telemetry.lap_number == 1
-    assert len(car.current_lap_telemetry.lap_distance) == 1
+    assert car.current_lap_telemetry.started_at_lap_boundary is False
 
-    # next frame crosses line so lap 2
-
+    # cross into lap 2 we now know starts at its boundary
     lap_packet_2 = make_state_lap_packet(101, 2, 5.0)
     telemetry_packet_2 = make_state_telemetry_packet(101, 255)
 
     state.update(lap_packet_2)
     state.update(telemetry_packet_2)
 
-    # lap 1 done
-    assert 1 in car.completed_lap_telemetry
+    # lap 1 should not be stored because it was the first observed lap
+    assert 1 not in car.completed_lap_telemetry
 
-    completed_lap = car.completed_lap_telemetry[1]
-
-    assert len(completed_lap.lap_distance) == 1
-    assert completed_lap.lap_distance[0] == pytest.approx(5000.0)
-    assert completed_lap.speed[0] == 250
-
-    # now check lap 2 is on the go
     assert car.current_lap_telemetry is not None
     assert car.current_lap_telemetry.lap_number == 2
-    assert len(car.current_lap_telemetry.lap_distance) == 1
-    assert car.current_lap_telemetry.lap_distance[0] == pytest.approx(5.0)
-    assert car.current_lap_telemetry.speed[0] == 255
+    assert car.current_lap_telemetry.started_at_lap_boundary is True
+    assert car.current_lap_telemetry.lap_distance == pytest.approx([5.0])
+    assert car.current_lap_telemetry.speed == [255]
+
+    # cross into lap 3 so lap 2 should be done
+    lap_packet_3 = make_state_lap_packet(102, 3, 5.0)
+    telemetry_packet_3 = make_state_telemetry_packet(102, 260)
+
+    state.update(lap_packet_3)
+    state.update(telemetry_packet_3)
+
+    assert 2 in car.completed_lap_telemetry
+
+    completed_lap = car.completed_lap_telemetry[2]
+
+    assert len(completed_lap.lap_distance) == 1
+    assert completed_lap.lap_distance[0] == pytest.approx(5.0)
+    assert completed_lap.speed[0] == 255
+
+    # now lap 3 is on the go
+    assert car.current_lap_telemetry is not None
+    assert car.current_lap_telemetry.lap_number == 3
+    assert car.current_lap_telemetry.lap_distance == pytest.approx([5.0])
+    assert car.current_lap_telemetry.speed == [260]
+
+
+def test_unmatched_lap_data_does_not_advance_telemetry_history():
+    state = ApplicationState()
+
+    # first observed lap dont trust
+    lap_packet_1 = make_state_lap_packet(
+        frame=100,
+        lap_number=1,
+        lap_distance=5000.0,
+    )
+    telemetry_packet_1 = make_state_telemetry_packet(
+        frame=100,
+        speed=250,
+    )
+
+    state.update(lap_packet_1)
+    state.update(telemetry_packet_1)
+
+    car = state.cars[0]
+
+    # lap 2 starts at boundary
+    lap_packet_2 = make_state_lap_packet(
+        frame=101,
+        lap_number=2,
+        lap_distance=5.0,
+    )
+    telemetry_packet_2 = make_state_telemetry_packet(
+        frame=101,
+        speed=255,
+    )
+
+    state.update(lap_packet_2)
+    state.update(telemetry_packet_2)
+
+    assert car.current_lap_telemetry is not None
+    assert car.current_lap_telemetry.lap_number == 2
+    assert car.current_lap_telemetry.started_at_lap_boundary is True
+
+    # lap data for lap 3 arrives but there is no matching telemetry yet
+    lap_packet_3 = make_state_lap_packet(
+        frame=102,
+        lap_number=3,
+        lap_distance=5.0,
+    )
+
+    state.update(lap_packet_3)
+
+    # telemetry history must not advance yet
+    assert car.current_lap_telemetry is not None
+    assert car.current_lap_telemetry.lap_number == 2
+    assert 2 not in car.completed_lap_telemetry
+
+    # matching telemetry arrives
+    telemetry_packet_3 = make_state_telemetry_packet(
+        frame=102,
+        speed=260,
+    )
+
+    state.update(telemetry_packet_3)
+
+    # now alter
+    assert 2 in car.completed_lap_telemetry
+
+    assert car.current_lap_telemetry is not None
+    assert car.current_lap_telemetry.lap_number == 3
+    assert car.current_lap_telemetry.lap_distance == pytest.approx([5.0])
+    assert car.current_lap_telemetry.speed == [260]
+
+
+def test_first_partial_lap_is_not_completed():
+    state = ApplicationState()
+
+    # sims backend starting halfway through a lap
+    lap_packet_5 = make_state_lap_packet(
+        frame=100,
+        lap_number=5,
+        lap_distance=2500.0,
+    )
+    telemetry_packet_5 = make_state_telemetry_packet(
+        frame=100,
+        speed=220,
+    )
+
+    state.update(lap_packet_5)
+    state.update(telemetry_packet_5)
+
+    car = state.cars[0]
+
+    assert car.current_lap_telemetry is not None
+    assert car.current_lap_telemetry.lap_number == 5
+
+    # Cross the line into lap 6.
+    lap_packet_6_start = make_state_lap_packet(
+        frame=101,
+        lap_number=6,
+        lap_distance=5.0,
+    )
+    telemetry_packet_6_start = make_state_telemetry_packet(
+        frame=101,
+        speed=230,
+    )
+
+    state.update(lap_packet_6_start)
+    state.update(telemetry_packet_6_start)
+
+    # lap 5 not full so dont appear
+    assert 5 not in car.completed_lap_telemetry
+
+    # lap 6 should be good
+    assert car.current_lap_telemetry is not None
+    assert car.current_lap_telemetry.lap_number == 6
+    assert car.current_lap_telemetry.started_at_lap_boundary is True
+
+    # now go to 7
+    lap_packet_7_start = make_state_lap_packet(
+        frame=102,
+        lap_number=7,
+        lap_distance=5.0,
+    )
+    telemetry_packet_7_start = make_state_telemetry_packet(
+        frame=102,
+        speed=235,
+    )
+
+    state.update(lap_packet_7_start)
+    state.update(telemetry_packet_7_start)
+
+    # we had lap 6 beginning and end so it is good
+    assert 6 in car.completed_lap_telemetry
 
 
 # test for lap telem flashback
@@ -991,6 +1133,12 @@ def test_lap_telemetry_to_buffer():
 def test_different_lap_flashback():
     state = ApplicationState()
 
+    # establish an earlier lap first so lap 3 begins at a known boundary
+    lap_packet_0 = make_state_lap_packet(99, 2, 5000.0)
+    telemetry_packet_0 = packet_add_session_time(
+        make_state_telemetry_packet(99, 190), 84.0
+    )
+
     lap_packet_1 = make_state_lap_packet(100, 3, 1000.0)
     telemetry_packet_1 = packet_add_session_time(
         make_state_telemetry_packet(100, 200), 85.0
@@ -1005,6 +1153,9 @@ def test_different_lap_flashback():
     telemetry_packet_3 = packet_add_session_time(
         make_state_telemetry_packet(102, 240), 87.0
     )
+
+    state.update(lap_packet_0)
+    state.update(telemetry_packet_0)
 
     state.update(lap_packet_1)
     state.update(telemetry_packet_1)
@@ -1021,12 +1172,13 @@ def test_different_lap_flashback():
     assert car.current_lap_telemetry.lap_number == 4
     assert car.current_lap_telemetry.session_time == pytest.approx([87.0])
 
-    assert car.completed_lap_telemetry is not None
     assert 3 in car.completed_lap_telemetry
-    np.testing.assert_allclose(car.completed_lap_telemetry[3].session_time, [85.0, 86.0])
+    np.testing.assert_allclose(
+        car.completed_lap_telemetry[3].session_time,
+        [85.0, 86.0]
+    )
 
     # flashback between second and third entry, crossing lap 3/4
-
     flashback_packet = EventPacket.from_bytes(make_event_packet(
         "FLBK", struct.pack("<If", 102, 85.5)
     ))
@@ -1037,7 +1189,6 @@ def test_different_lap_flashback():
     assert state._pending_flashback_frame == 102
 
     # now new lap data inbound, lap 3
-
     lap_packet_4 = make_state_lap_packet(103, 3, 1200.0)
     state.update(lap_packet_4)
 
@@ -1058,8 +1209,12 @@ def test_different_lap_flashback():
 
     state.update(telemetry_packet_4)
 
-    assert car.current_lap_telemetry.session_time == pytest.approx([85.0, 85.6])
-    assert car.current_lap_telemetry.lap_distance == pytest.approx([1000.0, 1200.0])
+    assert car.current_lap_telemetry.session_time == pytest.approx(
+        [85.0, 85.6]
+    )
+    assert car.current_lap_telemetry.lap_distance == pytest.approx(
+        [1000.0, 1200.0]
+    )
     assert car.current_lap_telemetry.speed == [200, 238]
 
 def test_flashback_to_lap_zero():
@@ -1110,6 +1265,12 @@ def test_flashback_across_multiple_laps():
     This tests that a flashback spanning multiple laps deletes completed laps correctly and restarts the correct buffer
     """
     state = ApplicationState()
+
+    # establish an earlier lap so lap 3 begins at a known boundary
+    lap_packet_0 = make_state_lap_packet(99, 2, 5000.0)
+    telemetry_packet_0 = packet_add_session_time(
+        make_state_telemetry_packet(99, 190), 84.0
+    )
     
     lap_packet_1 = make_state_lap_packet(100, 3, 1000.0)
     telemetry_packet_1 = packet_add_session_time(
@@ -1125,6 +1286,9 @@ def test_flashback_across_multiple_laps():
     telemetry_packet_3 = packet_add_session_time(
         make_state_telemetry_packet(102, 240), 87.0
     )
+
+    state.update(lap_packet_0)
+    state.update(telemetry_packet_0)
 
     state.update(lap_packet_1)
     state.update(telemetry_packet_1)

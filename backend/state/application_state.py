@@ -245,8 +245,6 @@ class ApplicationState:
             if pending_flashback:
                 self._apply_flashback_to_car(car, target_lap_number=lap.current_lap_num, target_session_time=self._pending_flashback_time)
 
-            self._update_lap_telemetry(car, lap)
-
             car.lap = lap
 
         if pending_flashback:
@@ -403,6 +401,7 @@ class ApplicationState:
 
             time = telemetry_packet.header.session_time
 
+            self._update_lap_telemetry(car, lap)
             self._record_telemetry_sample(car, lap, telem, time)
 
     def _clean_frame_buffer(self, current_frame: int) -> None:
@@ -478,8 +477,10 @@ class ApplicationState:
         if new_lap_number > current_lap_number:
             self._complete_lap_telemetry(car)
 
-        # start new buffer for new lap
-        # hopefully handles stuff like flashback
+            car.current_lap_telemetry = LapTelemetryBuffer(new_lap_number, started_at_lap_boundary=True)
+            return
+
+        # unexpected new lap, just replace buffer but dont set lap boundary
         car.current_lap_telemetry = LapTelemetryBuffer(new_lap_number)
 
     def _complete_lap_telemetry(self, car: CarState) -> None:
@@ -494,6 +495,9 @@ class ApplicationState:
         if not buffer.lap_distance:
             return
 
+        # if we didn't see the full lap, discard
+        if not buffer.started_at_lap_boundary:
+            return
 
         completed = buffer.finish()
 

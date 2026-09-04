@@ -209,7 +209,7 @@ function App() {
   return (
     <div className="app-shell">
         <h1 className="app-title">
-            F1 25 Pit Wall - Track Geometry: {trackGeometry ? `${trackGeometry.points.length} points` : "Waiting"}
+            F1 25 Pit Wall
         </h1>
 
         <main className="app">
