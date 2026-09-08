@@ -174,3 +174,23 @@
 
     padding: 16px;
 }
+
+.analysis-panel {
+    height: 100%;
+    min-height: 0;
+
+    padding: 16px;
+
+    overflow-y: auto;
+}
+
+.session-panel {
+    height: 100%;
+    padding: 16px;
+}
+
+.page-content {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
