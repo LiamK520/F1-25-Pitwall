@@ -193,3 +193,26 @@ export interface TrackReady {
     session_uid: number
     track_id: number
 }
+
+export interface AvailableLapsResponse {
+    car_index: number
+    laps: number[]
+}
+
+export interface LapTelemetryResponse {
+    car_index: number
+    lap_number: number
+
+    session_time: number[]
+    lap_distance: number[]
+
+    speed: number[]
+    throttle: number[]
+    brake: number[]
+    steer: number[]
+
+    gear: number[]
+    rpm: number[]
+
+    drs: boolean[]
+}

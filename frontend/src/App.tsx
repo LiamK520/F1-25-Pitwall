@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, act } from "react"
+import { useEffect, useState, useRef } from "react"
 
 import type {
   LiveFrame,
@@ -14,6 +14,7 @@ import InfoBar from "./components/InfoBar"
 import PanelNavigator, {type DashboardTab} from "./components/PanelNavigator"
 import TrackMap from "./components/TrackMap"
 import ComparisonArea from "./components/ComparisonArea"
+import AnalysisPanel from "./components/AnalysisPanel"
 
 import "./App.css"
 
@@ -187,12 +188,8 @@ function App() {
       break
 
     case "analysis":
-        content = (
-            <section className="analysis-panel">
-                <h2>Analysis</h2>
-                <p>Analysis panel coming soon</p>
-            </section>
-        )
+        content = state ? <AnalysisPanel state={state}/>
+          : <p>Waiting for session state...</p>
         break
 
     case "session":
