@@ -8,7 +8,8 @@ The application ingests UDP packets sent by the game, decodes and aligns indepen
 
 > **Status:** Active development. The live timing tower, track reconstruction and map, lap history and initial analysis tools are implemented. Current progress is focused on expanding the existing analysis features.
 
-![Screenshot goes here later]()
+![Live Screenshot](screenshots/Live.png)
+![Analysis Screenshot](screenshots/Analysis.png)
 
 ## Features
 
@@ -209,6 +210,16 @@ In the `backend` directory, run:
 `python3 -m udp.receiver --record`
 
 Now, start an F1 25 session with the configuration from above. The receiver will capture and timestamp all incoming packets whilst the receiver is active. These packets will be saved to `backend/recordings/test.bin`, overwriting the file if it already exists.
+
+#### Sample Recording
+
+A sample telemetry recording is available for testing the replay system without running F1 25.
+
+Download it from the [v0.1.0 release](https://github.com/LiamK520/F1-25-Pitwall/releases/tag/v0.1.0), extract the archive, and place `test.bin` at:
+
+`backend/recordings/test.bin`
+
+Then follow the replay instructions below.
 
 #### Replaying
 
